@@ -1,0 +1,1 @@
+<template><div>SidePanel</div></template>

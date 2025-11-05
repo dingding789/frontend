@@ -1,0 +1,1 @@
+<template><div>HistoryPanel</div></template>

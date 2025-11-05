@@ -1,0 +1,28 @@
+{
+  "name": "vite-project",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "clean:srcjs": "powershell -NoProfile -Command \"Get-ChildItem -Path src -Recurse -Include *.js,*.vue.js -File | Remove-Item -Force\""
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.13",
+    "axios": "^1.12.2",
+    "tailwindcss": "^4.1.13",
+    "three": "^0.180.0",
+    "vue": "^3.5.22"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@types/three": "^0.180.0",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/tsconfig": "^0.8.1",
+    "typescript": "~5.8.3",
+    "vite": "^7.1.12",
+    "vue-tsc": "^3.0.8"
+  }
+}
