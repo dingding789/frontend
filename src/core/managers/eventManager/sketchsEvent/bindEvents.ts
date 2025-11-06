@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { SketchPlaneName } from '../../sketchManager/SketchManager';
 import { ArcItem, CircleItem, LineItem, PointItem, RectItem, SketchItem } from '../../../../core/geometry/sketchs';
+import { SplineCurveItem } from '../../../geometry/sketchs/SplineCurveItem';
 
 /**
  * 绑定草图绘制相关事件（点击）
@@ -15,6 +16,13 @@ export function bindEvents(app: any, manager: any, session: any) {
   app.renderer.domElement.addEventListener('click', (e: MouseEvent) => {
     // 非绘制状态直接返回
     if (!session.isSketching.value) return;
+
+    // 拖拽刚结束时，抑制一次 click 生成新点
+    if (session.suppressNextClick) {
+      session.suppressNextClick = false;
+      return;
+    }
+
     // 计算鼠标在画布上的归一化坐标
     const rect = app.renderer.domElement.getBoundingClientRect();
     session.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -48,6 +56,10 @@ export function bindEvents(app: any, manager: any, session: any) {
 
     // 根据当前工具类型分发到对应绘制逻辑
     switch (session.currentTool) {
+      case 'spline':
+        // 点击连续加点；首点仅创建 previewItem，不立即预览
+        SplineCurveItem.handleSplineTool(app, manager, intersect, 'add');
+        break;
       case 'point':
         PointItem.handlePointTool(app, manager, intersect);
         break;
@@ -55,7 +67,7 @@ export function bindEvents(app: any, manager: any, session: any) {
         LineItem.handleLineTool(app, manager, intersect);
         break;
       case 'arc':
-        ArcItem.handleArcTool(app, manager, intersect);
+        ArcItem.handleArcTool(app, manager, intersect, session.arcMode, session.currentSketchPlane);
         break;
       case 'circle':
         CircleItem.handleCircleTool(app, manager, intersect, session.circleMode, session.currentSketchPlane);
@@ -65,5 +77,5 @@ export function bindEvents(app: any, manager: any, session: any) {
         break;
     }
     app.renderOnce();
-  });
+  }, false);
 }

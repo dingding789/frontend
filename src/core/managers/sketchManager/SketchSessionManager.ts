@@ -32,6 +32,10 @@ export class SketchSessionManager {
     public rectMode: 'two-point' | 'three-point' = 'two-point';
     // 圆形绘制模式：'two-point' | 'three-point'，提供默认值以避免未声明属性错误
     public circleMode: 'two-point' | 'three-point' = 'two-point';
+    // 圆弧绘制模式：'threePoints' | 'centerStartEnd'，提供默认值以避免未声明属性错误
+    public arcMode: 'threePoints' | 'centerStartEnd' = 'threePoints';
+    // 样条绘制模式：'passPoint' | 'dependencePoint'，提供默认值以避免未声明属性错误
+    public SpineCurveMode: 'passPoint' | 'dependencePoint' = 'passPoint';
 
     /**
      * 构造函数
@@ -63,4 +67,13 @@ export class SketchSessionManager {
     setCircleMode(mode: 'two-point' | 'three-point') {
         this.circleMode = mode;
     }
+    /** 设置圆弧模式（暂存用户选择，供后续绘制逻辑使用） */
+    setArcMode(mode: 'threePoints' | 'centerStartEnd') {
+    this.arcMode = mode;
+   } 
+   // 设置样条模式（暂存用户选择，供后续绘制逻辑使用）
+   setSplineMode(mode: 'passPoint' | 'dependencePoint') {
+    this.SpineCurveMode = mode;
+   }
+
 }
