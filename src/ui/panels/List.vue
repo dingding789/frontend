@@ -24,8 +24,12 @@
       <li
         v-for="item in list"
         :key="item.id"
-        class="p-2 border border-gray-700 rounded flex justify-between items-center hover:bg-gray-800 transition"
+        class="p-2 border border-gray-700 rounded flex justify-between items-center hover:bg-gray-800 transition cursor-pointer"
         :class="{ 'bg-blue-800': selectedId === item.id }"
+        :style="{ backgroundColor: selectedId === item.id ? '#1e40af' : '' }"
+        @mousedown="load(item.id)"
+        tabindex="0"
+        @keydown.enter.prevent="load(item.id)"
       >
         <div class="flex-1 text-gray-200 truncate">
           {{ item.name }}
@@ -40,7 +44,7 @@
           </button> -->
           <button
             class="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded"
-            @click="remove(item.id)"
+            @mousedown.stop="remove(item.id)"
           >
             删除
           </button>
@@ -70,10 +74,33 @@ function refresh() {
   sketch.sketchData.loadAll()
 }
 /** 加载指定草图 */
-// async function load(id: number) {
-//   selectedId.value = id
-//   await sketch.loadById(id)
-// }
+async function load(id: number) {
+  selectedId.value = id
+  try {
+    // 优先调用 HighlightManager 提供的按 id 高亮接口
+    if ((sketch as any).highlightMgr && typeof (sketch as any).highlightMgr.highlightBySketchId === 'function') {
+      await (sketch as any).highlightMgr.highlightBySketchId(id);
+      return;
+    }
+
+    // 向后兼容：如果没有该接口，回退到直接加载并调用 highlight
+    const idx = sketch.sketchList.value.findIndex((it: any) => it.id === id);
+    if (idx >= 0 && sketch.allSketchItems && sketch.allSketchItems[idx]) {
+      (sketch as any).highlightMgr?.highlight?.(sketch.allSketchItems[idx]);
+      app.renderOnce();
+      return;
+    }
+
+    await sketch.sketchData.loadById(id);
+    const newIdx = sketch.sketchList.value.findIndex((it: any) => it.id === id);
+    if (newIdx >= 0 && sketch.allSketchItems[newIdx]) {
+      (sketch as any).highlightMgr?.highlight?.(sketch.allSketchItems[newIdx]);
+      app.renderOnce();
+    }
+  } catch (err) {
+    console.error('加载或高亮草图失败', err);
+  }
+}
 
 /** 删除指定草图 */
 async function remove(id: number) {

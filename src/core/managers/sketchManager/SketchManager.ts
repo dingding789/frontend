@@ -32,7 +32,7 @@ export default class SketchManager {
   public sketchData: SketchDataManager;     // 管理草图数据上传和列表刷新
   public sketchSession: SketchSessionManager; // 管理绘图状态（是否绘制中、当前平面、当前工具）
   private planeMgr: SketchPlaneManager;     // 管理绘图平面和点击选择逻辑
-  private highlightMgr: HighlightManager;   // 平面高亮管理
+  public highlightMgr: HighlightManager;   // 平面高亮管理（公开以便 UI 调用）
 
   // ---------------- 草图元素数据 ----------------
   public allSketchItems: SketchItem[][] = []; // 所有历史草图元素（可用于撤销/重做等）
@@ -52,6 +52,8 @@ export default class SketchManager {
     this.sketchSession = new SketchSessionManager(app, this);
     this.highlightMgr = new HighlightManager(app, this);
   }
+
+  
 
   // ---------------- 基本控制方法 ----------------
 

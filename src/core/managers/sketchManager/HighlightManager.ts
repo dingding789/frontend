@@ -9,6 +9,7 @@ import { SketchItem } from '../../geometry/sketchs';
  */
 export class HighlightManager {
   private highlightedItem: SketchItem | SketchItem[] | null = null; // 当前高亮的草图项（可为单个或数组）
+  private persistent = false; // 是否为持久高亮（由外部显式触发）
   private highlightColor = 0xffaa00; // 高亮颜色（橙色）
   private normalColor = 0x00ffff; // 正常颜色（青色）
   private allItems: SketchItem[] = []; // 所有草图项的集合
@@ -26,6 +27,46 @@ export class HighlightManager {
   }
 
   /**
+   * 根据草图 id 查找并高亮对应的草图（如果未加载则尝试触发加载）
+   * @param id 草图 id
+   */
+  public async highlightBySketchId(id: number | string) {
+    try {
+      // 先尝试通过 manager.sketchList 找到对应的索引（allSketchItems 的数组顺序与 sketchList 对应）
+      const list = this.manager.sketchList?.value || [];
+      let found: SketchItem[] | null = null;
+      let idx = list.findIndex((it: any) => String(it.id) === String(id));
+      if (idx >= 0 && this.manager.allSketchItems && this.manager.allSketchItems[idx]) {
+        found = this.manager.allSketchItems[idx];
+      }
+
+      // 如果未找到，尝试通过 manager.sketchData.loadById 加载该草图（如果可用）
+      if (!found && this.manager.sketchData && typeof this.manager.sketchData.loadById === 'function') {
+        // 如果尚未加载该草图，尝试通过后端加载（loadById）
+        await this.manager.sketchData.loadById(Number(id));
+        // 加载后，sketchList 与 allSketchItems 应已更新，重新查找索引
+        const list2 = this.manager.sketchList?.value || [];
+        const newIdx = list2.findIndex((it: any) => String(it.id) === String(id));
+        if (newIdx >= 0 && this.manager.allSketchItems && this.manager.allSketchItems[newIdx]) {
+          found = this.manager.allSketchItems[newIdx];
+        }
+      }
+
+      // 如果找到则高亮并渲染（持久高亮）
+      if (found) {
+        this.highlight(found, true);
+        this.app.renderOnce();
+      } else {
+        // 未找到则取消持久高亮并渲染
+        this.highlight(null, false);
+        this.app.renderOnce();
+      }
+    } catch (err) {
+      console.error('[HighlightManager] highlightBySketchId 错误', err);
+    }
+  }
+
+  /**
    * 设置所有草图项
    * @param items 草图项数组
    */
@@ -37,7 +78,12 @@ export class HighlightManager {
    * 高亮指定的草图项数组，如果已有高亮项则恢复其正常颜色
    * @param items 需要高亮的草图项数组或 null
    */
-  highlight(items: SketchItem[] | null) {
+  /**
+   * 高亮指定的草图项数组，如果已有高亮项则恢复其正常颜色
+   * @param items 需要高亮的草图项数组或 null
+   * @param persistent 是否为持久高亮（true 表示不应被空的拾取覆盖）
+   */
+  highlight(items: SketchItem[] | null, persistent = false) {
     // 恢复之前高亮的项目颜色
     if (Array.isArray(this.highlightedItem)) {
       this.highlightedItem.forEach(prevItem => {
@@ -51,14 +97,21 @@ export class HighlightManager {
 
     // 更新当前高亮项
     this.highlightedItem = items;
+    // 设置持久标志
+    this.persistent = !!(items && persistent);
 
     // 设置新的高亮颜色
     if (items && items.length > 0) {
-      items.forEach(it => {
+      items.forEach((it) => {
         const mat = (it.object3D as any)?.material;
         if (mat?.color) mat.color.setHex(this.highlightColor);
+        if (mat) mat.needsUpdate = true;
       });
     }
+    // 立即渲染并再做一次延时渲染以确保浏览器刷新（处理可能的事件顺序和重绘时机问题）
+    try { this.app.renderOnce(); } catch (e) { /* ignore */ }
+    setTimeout(()=>{ try{ this.app.renderOnce(); }catch(e){} }, 40);
+    setTimeout(()=>{ try{ this.app.renderOnce(); }catch(e){} }, 150);
   }
 
   /**
@@ -77,11 +130,24 @@ export class HighlightManager {
       const obj = intersects[0].object;
       // 找到与相交物体对应的 SketchItem
       const hit = items.find(i => i.find(j => j.object3D === obj))?? null;
-      this.highlight(hit); // 高亮找到的草图项
+      // 如果当前存在持久高亮且命中的正好是同一组，则保留持久高亮（不改动）
+      if (this.persistent && this.highlightedItem && Array.isArray(this.highlightedItem) && hit) {
+        const prev = this.highlightedItem as SketchItem[];
+        const same = hit.every(h => prev.find((x: SketchItem) => x === h) !== undefined);
+        if (same) {
+          return hit;
+        }
+      }
+
+      // 非持久或不同项，使用普通（非持久）高亮
+      this.highlight(hit, false); // 高亮找到的草图项
       return hit; // 返回找到的草图项
     }
     // 如果没有相交的物体，取消高亮
-    this.highlight(null);
+    // 仅当当前不是持久高亮时才取消
+      if (!this.persistent) {
+        this.highlight(null, false);
+      }
     return null; // 返回 null
   }
 
