@@ -6,4 +6,4 @@ export *  from './Rect3PreviewItem';
 export *  from './RectPreviewItem';
 export *  from './RectItem';
 export * from './SketchItem';
-
+export * from './SplineCurveItem';

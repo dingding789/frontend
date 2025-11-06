@@ -26,7 +26,7 @@
   </div>
 </template>
 <script lang="ts" setup>
-import List from './ui/panels/List.vue'; // 导入 List 组件（使用相对路径，避免引用开发机器的绝对路径）
+import List from './ui/panels/List.vue';
 import ThreeViewer from './ui/viewport/ThreeViewer.vue'; // 导入 ThreeViewer 组件
 import CommandBar from './ui/layout/CommandBar.vue';
 </script>

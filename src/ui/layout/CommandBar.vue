@@ -7,23 +7,33 @@
       <button class="px-3 py-1 hover:bg-gray-700 rounded">扫掠</button>
       <button class="px-3 py-1 hover:bg-gray-700 rounded">放样</button>
     </template>
-    <!-- 如果在绘制草图模式下，显示完成草图及草图绘制工具按钮 -->
+
     <template v-else>
       <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="sketch.finishSketch()">完成草图</button>
       <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="sketch.sketchSession.setTool('point')">点</button>
-
       <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="sketch.sketchSession.setTool('line')">直线</button>
-      <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="sketch.sketchSession.setTool('arc')">圆弧</button>
       <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handleRectClick">矩形</button>
       <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handleCircleClick">圆</button>
+      <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handleArcClick">圆弧</button>
+      <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handleSplineClick">样条曲线</button>
     </template>
+
     <div class="flex-1"></div>
   </div>
-  <!-- 矩形方式对话框 -->
+
+  <!-- 对话框 -->
   <RectModeDialog v-if="showRectDialog" @select="handleRectModeSelect" @close="showRectDialog = false" />
-  <!-- 圆方式对话框 -->
-  <CircleDLG v-if="showCircleDialog" @select="handleCircleModeSelect" @close="showCircleDialog = false" />
-  <!-- 拉伸方式对话框 -->
+  <CircleDialog v-if="showCircleDialog" @select="handleCircleModeSelect" @close="showCircleDialog = false" />
+  <ArcDialog v-if="showArcDialog" @select="handleArcModeSelect" @close="showArcDialog = false" />
+
+  <!-- 使用 v-model:open 绑定，确保对话框可打开/关闭 -->
+  <SplineCurveDialog
+    v-model:open="showSplineCurveDialog"
+    :app="app"
+    :manager="sketch"
+    @select="handleSplineModeSelect"
+  />
+
   <ExtrudeDialog
     v-if="showExtrudeDialog"
     :selectedSketch="selectedSketch"
@@ -37,11 +47,13 @@
 import { onMounted, ref } from 'vue';
 import AppManager from '../../core/scene/SceneManager';
 import RectModeDialog from '../dialogs/RectModeDialog.vue';
-import CircleDLG from '../dialogs/CircleDialog.vue';
+import CircleDialog from '../dialogs/CircleDialog.vue';
 import ExtrudeDialog from '../dialogs/ExtrudeDialog.vue';
 import { CommandBarFns } from './CommandBarFns';
 import * as THREE from 'three';
 import type { ExtrudeItem } from '../../core/geometry/features/ExtrudeItem';
+import ArcDialog from '../dialogs/ArcDialog.vue';
+import SplineCurveDialog from '../dialogs/SplineCurveDialog.vue';
 
 const app = AppManager.getInstance();
 const sketch = app.sketchMgr;
@@ -50,6 +62,9 @@ const extrude = app.extrudeMgr;
 const showRectDialog = ref(false);
 const showCircleDialog = ref(false);
 const showExtrudeDialog = ref(false);
+const showArcDialog = ref(false);
+const showSplineCurveDialog = ref(false);
+
 const selectedSketch = ref<ExtrudeItem | null>(null);
 const previewMesh = ref<THREE.Mesh | null>(null);
 const customLineDir = ref<{ x: number, y: number, z: number } | null>(null);
@@ -60,29 +75,44 @@ function handleRectClick() {
 function handleCircleClick() {
   CommandBarFns.onCircleClick(sketch, showCircleDialog);
 }
-function handleRectModeSelect(mode) {
+function handleRectModeSelect(mode: any) {
   CommandBarFns.onRectModeSelect(sketch, showRectDialog, mode);
 }
-function handleCircleModeSelect(mode) {
+function handleCircleModeSelect(mode: any) {
   CommandBarFns.onCircleModeSelect(sketch, showCircleDialog, mode);
 }
 function handleExtrudeClick() {
   CommandBarFns.onExtrudeClick(extrude, showExtrudeDialog, selectedSketch, CommandBarFns.sketchItemToExtrudeItem);
 }
-function handleExtrudeConfirm(params) {
+function handleExtrudeConfirm(params: any) {
   CommandBarFns.onExtrudeConfirm(app, extrude, selectedSketch, previewMesh, showExtrudeDialog, params);
 }
 function handleExtrudeClose() {
   CommandBarFns.onExtrudeClose(app, previewMesh, showExtrudeDialog);
 }
 
-// 可选：在 mounted 时添加其他初始化逻辑，比如动画
-onMounted(() => {
+function handleArcClick() {
+  CommandBarFns.onArcClick(sketch, showArcDialog);
+}
+function handleArcModeSelect(mode: any) {
+  CommandBarFns.onArcModeSelect(sketch, showArcDialog, mode);
+}
 
-  //sketch.loadAll();
+// 点击样条按钮：切工具并打开对话框
+function handleSplineClick() {
+  sketch.sketchSession.setTool('spline');
+  showSplineCurveDialog.value = true;
+}
+
+// 接收对话框选择（占位）
+function handleSplineModeSelect(mode: 'passPoint' | 'dependencePoint') {
+  // 如需同步到会话： sketch.sketchSession.setSplineMode?.(mode);
+}
+
+// mounted
+onMounted(() => {
   app.animate(() => {
-    // 这里可以做草图高亮或其他每帧逻辑
+    // 每帧逻辑（可选）
   });
 });
-
 </script>
