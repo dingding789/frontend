@@ -13,7 +13,7 @@ import {
 } from './index';
 
 // ---------------- 工具 & 类型 ----------------
-export type SketchTool = 'point' | 'line' | 'arc' | 'rect' | 'circle'; // 草图工具类型，新增circle
+export type SketchTool = 'point' | 'line' | 'arc' | 'rect' | 'circle' | 'spline'; // 草图工具类型，新增circle
 export type SketchPlaneName = 'XY' | 'YZ' | 'XZ'; // 草图平面名称
 
 /**

@@ -34,6 +34,26 @@ export class CommandBarFns {
     showCircleDialog.value = false;
   }
 
+  static onArcClick(sketch, showArcDialog) {
+    sketch.sketchSession.setTool('arc');
+    if (showArcDialog && typeof showArcDialog === 'object' && 'value' in showArcDialog) {
+      showArcDialog.value = true;
+      }
+    }
+
+    static onArcModeSelect(sketch, showArcDialog, mode) {
+      sketch.sketchSession.setArcMode(mode);
+      showArcDialog.value = false;
+    }
+
+    static onSplineClick(sketch) {
+      sketch.sketchSession.setTool('spline');
+    }
+    
+    static onSplineModeSelect(sketch, showSplineCurveDialog, mode) {
+      showSplineCurveDialog.value = false;
+    }
+
   /**
    * 将草图项转换为拉伸特征项（ExtrudeItem）
    * 支持矩形和圆形草图项，其他类型返回null

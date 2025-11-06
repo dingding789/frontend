@@ -1,6 +1,6 @@
 // SketchItem.ts
 import * as THREE from 'three';
-export type SketchType = 'point'|'circle' | 'rect' | 'line' | 'spline'|'arc';
+export type SketchType = 'point'|'circle' | 'rect' | 'line' | 'spline'| 'arc';
 export abstract class SketchItem {
   // 公共属性，表示当前的3D对象，初始值为null
   public object3D: THREE.Object3D | null = null;

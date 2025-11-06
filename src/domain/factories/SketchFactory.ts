@@ -1,4 +1,4 @@
-import { PointItem, LineItem, ArcItem, CircleItem, RectItem } from '../../core/geometry/sketchs';
+import { PointItem, LineItem, ArcItem, CircleItem, RectItem,SplineCurveItem } from '../../core/geometry/sketchs';
 
 export class SketchFactory {
   static fromJSON(data: any): any {
@@ -13,6 +13,8 @@ export class SketchFactory {
         return CircleItem.fromJSON(data);
       case 'rect':
         return RectItem.fromJSON(data);
+      case 'spline':
+        return SplineCurveItem.fromJSON(data);
       default:
         return null;
     }
