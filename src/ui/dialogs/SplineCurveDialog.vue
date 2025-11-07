@@ -1,6 +1,16 @@
 <template>
-  <div v-if="isOpen" class="fixed top-16 left-4 z-50 bg-gray-800 text-white rounded shadow-lg border border-gray-700 w-64">
-    <div class="px-4 py-2 border-b border-gray-700 font-medium">样条曲线</div>
+  <div
+    v-if="isOpen"
+    class="fixed z-50 bg-gray-800 text-white rounded shadow-lg border border-gray-700 w-64"
+    :style="{ top: `${pos.y}px`, left: `${pos.x}px`, cursor: dragging ? 'move' : 'default' }"
+    @mousedown.self="startDrag"
+  >
+    <div
+      class="px-4 py-2 border-b border-gray-700 font-medium select-none cursor-move"
+      @mousedown.stop="startDrag"
+    >
+      样条曲线
+    </div>
 
     <div class="p-3">
       <div class="space-y-3">
@@ -13,7 +23,6 @@
           >
             通过点
           </button>
-
           <button
             class="w-full px-3 py-1 rounded text-left"
             :class="selectedMode === 'dependencePoint' ? 'bg-cyan-700 hover:bg-cyan-600' : 'bg-gray-700 hover:bg-gray-600'"
@@ -22,8 +31,6 @@
             根据极点
           </button>
         </div>
-
-        
       </div>
 
       <div class="flex justify-end gap-2 pt-3">
@@ -35,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, ref } from 'vue';
+import { computed, watch, ref, onMounted, onBeforeUnmount } from 'vue';
 import { SplineCurveItem } from '../../core/geometry/sketchs/SplineCurveItem';
 
 type SplineModeUI = 'passPoint' | 'dependencePoint';
@@ -55,7 +62,33 @@ const emit = defineEmits<{
   (e: 'close'): void;
 }>();
 
-// v-model:open 绑定
+// 拖动相关
+const pos = ref({ x: 16, y: 64 }); // 初始位置
+const dragging = ref(false);
+let dragOffset = { x: 0, y: 0 };
+
+function startDrag(e: MouseEvent) {
+  dragging.value = true;
+  dragOffset = {
+    x: e.clientX - pos.value.x,
+    y: e.clientY - pos.value.y,
+  };
+  window.addEventListener('mousemove', onDrag);
+  window.addEventListener('mouseup', stopDrag);
+}
+function onDrag(e: MouseEvent) {
+  if (!dragging.value) return;
+  pos.value.x = e.clientX - dragOffset.x;
+  pos.value.y = e.clientY - dragOffset.y;
+}
+function stopDrag() {
+  dragging.value = false;
+  window.removeEventListener('mousemove', onDrag);
+  window.removeEventListener('mouseup', stopDrag);
+}
+onBeforeUnmount(stopDrag);
+
+// v-model:open 绑定（对话框悬浮，除取消/完成或外部切换工具才关闭）
 const isOpen = computed({
   get: () => props.open,
   set: (v: boolean) => emit('update:open', v),
@@ -69,38 +102,85 @@ watch(() => props.open, (newVal) => {
   if (newVal) emit('select', selectedMode.value);
 });
 
-// 切换模式
+// 切换模式：只高亮并切换逻辑，不关闭对话框
 function chooseMode(mode: SplineModeUI) {
   selectedMode.value = mode;
   emit('select', mode);
 }
 
-// 完成：调用样条静态收尾方法（会隐藏句柄并退出样条工具），然后关闭对话框
-function onFinish() {
-  // 若提供 app 和 manager，则使用类方法统一处理落地/隐藏/退出工具
-  if (props.app && props.manager && typeof SplineCurveItem.finishAndExitTool === 'function') {
-    try {
+// 停止样条绘制/鼠标交互并切回选择工具（与圆/圆弧一致）
+function stopSplineTool() {
+  // 优先走类方法（若提供）
+  try {
+    if (props.app && props.manager && typeof SplineCurveItem.finishAndExitTool === 'function') {
       SplineCurveItem.finishAndExitTool(props.app, props.manager);
-    } catch (e) {
-      // 兜底：若出错仍通知上层
+      return;
     }
-  } else {
-    // 回退行为：仅通知父组件 finish（上层可自行处理）
-    emit('finish', selectedMode.value);
-  }
+  } catch {}
 
+  // 回退清理：移除 previewItem，切回 select
+  try {
+    const mgr = props.manager as any;
+    if (mgr?.previewItem) {
+      const prev = mgr.previewItem;
+      try {
+        if (typeof prev.remove === 'function') prev.remove(props.app?.scene);
+        else if (prev?.object3D && props.app?.scene) props.app.scene.remove(prev.object3D);
+      } catch {}
+      mgr.previewItem = null;
+    }
+    if (mgr?.sketchSession?.setTool) mgr.sketchSession.setTool('select');
+    else if (mgr?.setTool) mgr.setTool('select');
+    mgr.isDrawing = false;
+    mgr.currentTool = 'select';
+  } catch {}
+  try { props.app?.renderOnce?.(); } catch {}
+}
+
+// 完成：结束并关闭
+function onFinish() {
+  try {
+    if (props.app && props.manager && typeof SplineCurveItem.finishAndExitTool === 'function') {
+      SplineCurveItem.finishAndExitTool(props.app, props.manager);
+    } else {
+      emit('finish', selectedMode.value);
+    }
+  } catch {}
   emit('close');
   isOpen.value = false;
 }
 
-// 取消：通知并关闭
+// 取消：停止绘制并关闭
 function onCancel() {
+  stopSplineTool();
   emit('cancel');
   emit('close');
   isOpen.value = false;
 }
+
+// 监听外部事件：当点击其它按钮（切换工具）时自动关闭（与圆/圆弧一致）
+function externalClose() {
+  stopSplineTool();
+  emit('close');
+  isOpen.value = false;
+}
+function onToolChanged(e: Event) {
+  const tool = (e as CustomEvent<any>)?.detail?.tool;
+  if (tool && tool !== 'spline') {
+    externalClose();
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('sketch:close-dialogs', externalClose);
+  window.addEventListener('tool:changed', onToolChanged as EventListener);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener('sketch:close-dialogs', externalClose);
+  window.removeEventListener('tool:changed', onToolChanged as EventListener);
+});
 </script>
 
 <style scoped>
-/* 与其它对话框保持一致的基础样式，可按需调整 */
+/* 保持与其他对话框一致 */
 </style>

@@ -21,19 +21,19 @@ export class ArcItem extends SketchItem {
 
   // === 工具函数：由三点确定平面正交基 ===
   private static makePlaneBasisFromPoints(p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3) {
-    const v12 = new THREE.Vector3().subVectors(p2, p1);
-    const v13 = new THREE.Vector3().subVectors(p3, p1);
+    const vecP1P2 = new THREE.Vector3().subVectors(p2, p1);
+    const vecP1P3 = new THREE.Vector3().subVectors(p3, p1);
 
-    let planeNormal = new THREE.Vector3().crossVectors(v12, v13);
-    const nLen = planeNormal.length();
-    if (nLen < 1e-12) {
+    let planeNormal = new THREE.Vector3().crossVectors(vecP1P2, vecP1P3);
+    const normalLength = planeNormal.length();
+    if (normalLength < 1e-12) {
       planeNormal.set(0, 0, 1);
     } else {
-      planeNormal.divideScalar(nLen);
+      planeNormal.divideScalar(normalLength);
     }
 
-    // basisU: v12 去除法向分量后归一
-    const basisU = v12.clone().sub(planeNormal.clone().multiplyScalar(v12.dot(planeNormal)));
+    // basisU: vecP1P2 去除法向分量后归一
+    const basisU = vecP1P2.clone().sub(planeNormal.clone().multiplyScalar(vecP1P2.dot(planeNormal)));
     if (basisU.lengthSq() < 1e-12) basisU.set(1, 0, 0); else basisU.normalize();
 
     // basisV = n × u
@@ -43,50 +43,50 @@ export class ArcItem extends SketchItem {
 
   // === 工具函数：由 Center、Start、End 确定平面正交基（中心圆弧） ===
   private static makePlaneBasisFromCenterAndTwoPoints(center: THREE.Vector3, start: THREE.Vector3, end: THREE.Vector3) {
-    const cs = new THREE.Vector3().subVectors(start, center);
-    const ce = new THREE.Vector3().subVectors(end, center);
-    let planeNormal = new THREE.Vector3().crossVectors(cs, ce);
-    const nLen = planeNormal.length();
-    if (nLen < 1e-12) {
+    const centerToStart = new THREE.Vector3().subVectors(start, center);
+    const centerToEnd = new THREE.Vector3().subVectors(end, center);
+    let planeNormal = new THREE.Vector3().crossVectors(centerToStart, centerToEnd);
+    const normalLength = planeNormal.length();
+    if (normalLength < 1e-12) {
       planeNormal.set(0, 0, 1);
     } else {
-      planeNormal.divideScalar(nLen);
+      planeNormal.divideScalar(normalLength);
     }
 
     // U 使用 center->start 的方向在平面内的投影
-    const basisU = cs.clone().sub(planeNormal.clone().multiplyScalar(cs.dot(planeNormal))).normalize();
+    const basisU = centerToStart.clone().sub(planeNormal.clone().multiplyScalar(centerToStart.dot(planeNormal))).normalize();
     const basisV = new THREE.Vector3().crossVectors(planeNormal, basisU).normalize();
     return { planeNormal, basisU, basisV };
   }
 
   // 将3D点映射到以 origin 为原点，(basisU,basisV) 为轴的 2D 坐标
-  private static to2D(point: THREE.Vector3, origin: THREE.Vector3, basisU: THREE.Vector3, basisV: THREE.Vector3) {
-    const vec = new THREE.Vector3().subVectors(point, origin);
-    return new THREE.Vector2(vec.dot(basisU), vec.dot(basisV));
+  private static projectPointTo2D(point: THREE.Vector3, origin: THREE.Vector3, basisU: THREE.Vector3, basisV: THREE.Vector3) {
+    const delta = new THREE.Vector3().subVectors(point, origin);
+    return new THREE.Vector2(delta.dot(basisU), delta.dot(basisV));
   }
 
   // 三点定圆（使用三点决定的平面）
   private static circleFromThreePointsOnPlane(p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3) {
     const { planeNormal, basisU, basisV } = ArcItem.makePlaneBasisFromPoints(p1, p2, p3);
-    const A = ArcItem.to2D(p1, p1, basisU, basisV);
-    const B = ArcItem.to2D(p2, p1, basisU, basisV);
-    const C = ArcItem.to2D(p3, p1, basisU, basisV);
+    const pA2D = ArcItem.projectPointTo2D(p1, p1, basisU, basisV);
+    const pB2D = ArcItem.projectPointTo2D(p2, p1, basisU, basisV);
+    const pC2D = ArcItem.projectPointTo2D(p3, p1, basisU, basisV);
 
-    const x1 = A.x, y1 = A.y;
-    const x2 = B.x, y2 = B.y;
-    const x3 = C.x, y3 = C.y;
+    const aX = pA2D.x, aY = pA2D.y;
+    const bX = pB2D.x, bY = pB2D.y;
+    const cX = pC2D.x, cY = pC2D.y;
 
-    const d = 2 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2));
-    if (Math.abs(d) < 1e-12) return null; // 共线
+    const denom = 2 * (aX * (bY - cY) + bX * (cY - aY) + cX * (aY - bY));
+    if (Math.abs(denom) < 1e-12) return null; // 共线
 
-    const x1s = x1 * x1 + y1 * y1;
-    const x2s = x2 * x2 + y2 * y2;
-    const x3s = x3 * x3 + y3 * y3;
+    const aLenSq = aX * aX + aY * aY;
+    const bLenSq = bX * bX + bY * bY;
+    const cLenSq = cX * cX + cY * cY;
 
-    const ux = (x1s * (y2 - y3) + x2s * (y3 - y1) + x3s * (y1 - y2)) / d;
-    const uy = (x1s * (x3 - x2) + x2s * (x1 - x3) + x3s * (x2 - x1)) / d;
+    const centerLocalU = (aLenSq * (bY - cY) + bLenSq * (cY - aY) + cLenSq * (aY - bY)) / denom;
+    const centerLocalV = (aLenSq * (cX - bX) + bLenSq * (aX - cX) + cLenSq * (bX - aX)) / denom;
 
-    const center = p1.clone().add(basisU.clone().multiplyScalar(ux)).add(basisV.clone().multiplyScalar(uy));
+    const center = p1.clone().add(basisU.clone().multiplyScalar(centerLocalU)).add(basisV.clone().multiplyScalar(centerLocalV));
     const radius = center.distanceTo(p1);
 
     return { center, radius, planeNormal, basisU, basisV };
@@ -101,22 +101,22 @@ export class ArcItem extends SketchItem {
   }
 
   // 计算某点相对 (center, basisU, basisV) 的极角
-  private static angleOnUV(center: THREE.Vector3, point: THREE.Vector3, basisU: THREE.Vector3, basisV: THREE.Vector3) {
+  private static angleOnBasisUV(center: THREE.Vector3, point: THREE.Vector3, basisU: THREE.Vector3, basisV: THREE.Vector3) {
     const vec = new THREE.Vector3().subVectors(point, center);
     return Math.atan2(vec.dot(basisV), vec.dot(basisU));
   }
 
-  private static normAngle(a: number) {
+  private static normalizeAngle(angle: number) {
     const twoPI = Math.PI * 2;
-    a = a % twoPI;
-    return a < 0 ? a + twoPI : a;
+    angle = angle % twoPI;
+    return angle < 0 ? angle + twoPI : angle;
   }
 
-  // 判断 angleTest 是否在从 angleStart 逆时针到 angleEnd 的区间内（含端点）
-  private static isAngleBetweenCounterClockwise(angleStart: number, angleEnd: number, angleTest: number) {
-    const s = ArcItem.normAngle(angleStart);
-    let e = ArcItem.normAngle(angleEnd);
-    const t = ArcItem.normAngle(angleTest);
+  // 判断 testAngle 是否在从 startAngle 逆时针到 endAngle 的区间内（含端点）
+  private static isAngleBetweenCCW(startAngle: number, endAngle: number, testAngle: number) {
+    const s = ArcItem.normalizeAngle(startAngle);
+    let e = ArcItem.normalizeAngle(endAngle);
+    const t = ArcItem.normalizeAngle(testAngle);
     if (e < s) e += Math.PI * 2;
     let tt = t;
     if (tt < s) tt += Math.PI * 2;
@@ -132,32 +132,32 @@ export class ArcItem extends SketchItem {
     this.center = center.clone();
     this.radius = radius;
 
-    const a1 = ArcItem.angleOnUV(center, p1, basisU, basisV);
-    const a2 = ArcItem.angleOnUV(center, p2, basisU, basisV);
-    const a3 = ArcItem.angleOnUV(center, p3, basisU, basisV);
+    const angleAtP1 = ArcItem.angleOnBasisUV(center, p1, basisU, basisV);
+    const angleAtP2 = ArcItem.angleOnBasisUV(center, p2, basisU, basisV);
+    const angleAtP3 = ArcItem.angleOnBasisUV(center, p3, basisU, basisV);
 
     // 选择包含 p3 的 CCW 弧段
-    let start = a1, end = a2;
-    if (!ArcItem.isAngleBetweenCounterClockwise(start, end, a3)) {
-      start = a2; end = a1;
-      if (!ArcItem.isAngleBetweenCounterClockwise(start, end, a3)) return null;
+    let startAngle = angleAtP1, endAngle = angleAtP2;
+    if (!ArcItem.isAngleBetweenCCW(startAngle, endAngle, angleAtP3)) {
+      startAngle = angleAtP2; endAngle = angleAtP1;
+      if (!ArcItem.isAngleBetweenCCW(startAngle, endAngle, angleAtP3)) return null;
     }
 
-    let s = ArcItem.normAngle(start);
-    let e = ArcItem.normAngle(end);
-    if (e < s) e += Math.PI * 2;
+    let normalizedStart = ArcItem.normalizeAngle(startAngle);
+    let normalizedEnd = ArcItem.normalizeAngle(endAngle);
+    if (normalizedEnd < normalizedStart) normalizedEnd += Math.PI * 2;
 
     const pts: THREE.Vector3[] = [];
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
-      const ang = s + (e - s) * t;
+      const ang = normalizedStart + (normalizedEnd - normalizedStart) * t;
       const x = Math.cos(ang) * radius;
       const y = Math.sin(ang) * radius;
       pts.push(center.clone().add(basisU.clone().multiplyScalar(x)).add(basisV.clone().multiplyScalar(y)));
     }
 
-    this.startAngle = s;
-    this.endAngle = e;
+    this.startAngle = normalizedStart;
+    this.endAngle = normalizedEnd;
     return pts;
   }
 
@@ -165,27 +165,38 @@ export class ArcItem extends SketchItem {
   private buildArcPointsCenterStartEnd(center: THREE.Vector3, start: THREE.Vector3, end: THREE.Vector3, steps = 64): THREE.Vector3[] | null {
     const circle = ArcItem.circleFromCenterStartEnd(center, start, end);
     if (!circle) return null;
-    const { center: c, radius: r, basisU, basisV } = circle;
+    const { center: computedCenter, radius: computedRadius, basisU, basisV } = circle;
 
-    this.center = c.clone();
-    this.radius = r;
+    this.center = computedCenter.clone();
+    this.radius = computedRadius;
 
-    // 以 Center->Start 的方向为 0 角
-    const aStart = 0;
-    let aEnd = ArcItem.angleOnUV(c, end, basisU, basisV);
-    aEnd = ArcItem.normAngle(aEnd); // CCW 正角度
+    // 计算起点/终点在 basisU,basisV 下的极角（不做预先规范化）
+    const angleStartRaw = ArcItem.angleOnBasisUV(computedCenter, start, basisU, basisV);
+    const angleEndRaw = ArcItem.angleOnBasisUV(computedCenter, end, basisU, basisV);
 
+    const twoPI = Math.PI * 2;
+    const EPS = 1e-9;
+
+    // 以逆时针为方向，计算从 angleStartRaw 到 angleEndRaw 的角增量 delta（范围 [0, 2PI)）
+    let delta = ((angleEndRaw - angleStartRaw) % twoPI + twoPI) % twoPI;
+
+    // 若几乎无弧（接近 0）或接近完整圆（>= 2PI），则视为不可绘制
+    if (delta <= EPS) return null;
+    if (delta >= twoPI - 1e-6) return null;
+
+    // 生成从 angleStartRaw 逆时针到 angleStartRaw + delta 的点（允许 delta > PI）
     const pts: THREE.Vector3[] = [];
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
-      const ang = aStart + aEnd * t;
-      const x = Math.cos(ang) * r;
-      const y = Math.sin(ang) * r;
-      pts.push(c.clone().add(basisU.clone().multiplyScalar(x)).add(basisV.clone().multiplyScalar(y)));
+      const ang = angleStartRaw + delta * t;
+      const x = Math.cos(ang) * computedRadius;
+      const y = Math.sin(ang) * computedRadius;
+      pts.push(computedCenter.clone().add(basisU.clone().multiplyScalar(x)).add(basisV.clone().multiplyScalar(y)));
     }
 
-    this.startAngle = aStart;
-    this.endAngle = aEnd;
+    // 记录角度范围：startAngle 规范化为 [0,2π)，endAngle = start + delta（可 > 2π）
+    this.startAngle = ArcItem.normalizeAngle(angleStartRaw);
+    this.endAngle = this.startAngle + delta;
     return pts;
   }
 
@@ -311,12 +322,7 @@ export class ArcItem extends SketchItem {
   }
 
   /**
-   * 
-   * 
-   * 
-   * 
-   * 
-   * ircleTool 对应）
+   * Arc 工具统一处理（供 sketch 工具调用）
    * - app: 应用实例（用于 scene 等）
    * - manager: sketch 管理器，需包含 previewItem、sketchItems 等（sketchItems 为 Ref<Array>）
    * - intersect: 当前拾取点（THREE.Vector3）
@@ -330,20 +336,20 @@ export class ArcItem extends SketchItem {
       if (!manager.previewItem || !(manager.previewItem instanceof ArcItem)) {
         manager.previewItem = new ArcItem([pt], 'threePoints');
       } else {
-        const a = manager.previewItem as ArcItem;
-        a.setMode('threePoints');
-        if (!a.points) a.points = [];
-        if (a.points.length === 0) {
-          a.points.push(pt);
-        } else if (a.points.length === 1) {
-          a.points.push(pt);
-        } else if (a.points.length === 2) {
-          a.points.push(pt);
+        const preview = manager.previewItem as ArcItem;
+        preview.setMode('threePoints');
+        if (!preview.points) preview.points = [];
+        if (preview.points.length === 0) {
+          preview.points.push(pt);
+        } else if (preview.points.length === 1) {
+          preview.points.push(pt);
+        } else if (preview.points.length === 2) {
+          preview.points.push(pt);
           // finalize
-          a.remove(app.scene);
-          a.draw(app.scene);
+          preview.remove(app.scene);
+          preview.draw(app.scene);
           if (manager.sketchItems && Array.isArray(manager.sketchItems.value)) {
-            manager.sketchItems.value.push(a);
+            manager.sketchItems.value.push(preview);
           }
           manager.previewItem = null;
         }
@@ -353,20 +359,20 @@ export class ArcItem extends SketchItem {
       if (!manager.previewItem || !(manager.previewItem instanceof ArcItem)) {
         manager.previewItem = new ArcItem([pt], 'centerStartEnd');
       } else {
-        const a = manager.previewItem as ArcItem;
-        a.setMode('centerStartEnd');
-        if (!a.points) a.points = [];
-        if (a.points.length === 0) {
-          a.points.push(pt); // Center
-        } else if (a.points.length === 1) {
-          a.points.push(pt); // Start（定义半径方向）
-        } else if (a.points.length === 2) {
-          a.points.push(pt); // End
+        const preview = manager.previewItem as ArcItem;
+        preview.setMode('centerStartEnd');
+        if (!preview.points) preview.points = [];
+        if (preview.points.length === 0) {
+          preview.points.push(pt); // Center
+        } else if (preview.points.length === 1) {
+          preview.points.push(pt); // Start（定义半径方向）
+        } else if (preview.points.length === 2) {
+          preview.points.push(pt); // End
           // finalize
-          a.remove(app.scene);
-          a.draw(app.scene);
+          preview.remove(app.scene);
+          preview.draw(app.scene);
           if (manager.sketchItems && Array.isArray(manager.sketchItems.value)) {
-            manager.sketchItems.value.push(a);
+            manager.sketchItems.value.push(preview);
           }
           manager.previewItem = null;
         }

@@ -1,17 +1,18 @@
 <template>
   <div class="h-12 bg-gray-900 flex items-center px-4 shadow-md space-x-2">
     <template v-if="!sketch.sketchSession.isSketching.value">
-      <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="sketch.startSketch()">新建草图</button>
+      <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handleStartSketchClick">新建草图</button>
       <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handleExtrudeClick">拉伸</button>
-      <button class="px-3 py-1 hover:bg-gray-700 rounded">旋转</button>
-      <button class="px-3 py-1 hover:bg-gray-700 rounded">扫掠</button>
-      <button class="px-3 py-1 hover:bg-gray-700 rounded">放样</button>
+      <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="closeSketchDialogs(undefined, 'revolve')">旋转</button>
+      <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="closeSketchDialogs(undefined, 'sweep')">扫掠</button>
+      <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="closeSketchDialogs(undefined, 'loft')">放样</button>
     </template>
 
     <template v-else>
-      <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="sketch.finishSketch()">完成草图</button>
-      <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="sketch.sketchSession.setTool('point')">点</button>
-      <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="sketch.sketchSession.setTool('line')">直线</button>
+      <!-- 改为调用处理函数：先关闭其它对话框 -->
+      <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handleFinishSketchClick">完成草图</button>
+      <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handlePointClick">点</button>
+      <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handleLineClick">直线</button>
       <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handleRectClick">矩形</button>
       <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handleCircleClick">圆</button>
       <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handleArcClick">圆弧</button>
@@ -21,12 +22,25 @@
     <div class="flex-1"></div>
   </div>
 
-  <!-- 对话框 -->
   <RectModeDialog v-if="showRectDialog" @select="handleRectModeSelect" @close="showRectDialog = false" />
-  <CircleDialog v-if="showCircleDialog" @select="handleCircleModeSelect" @close="showCircleDialog = false" />
-  <ArcDialog v-if="showArcDialog" @select="handleArcModeSelect" @close="showArcDialog = false" />
 
-  <!-- 使用 v-model:open 绑定，确保对话框可打开/关闭 -->
+  <!-- 圆形对话框（悬浮） -->
+  <CircleDialog
+    v-if="showCircleDialog"
+    :app="app"
+    :manager="sketch"
+    @close="showCircleDialog = false"
+  />
+
+  <!-- 圆弧对话框（悬浮） -->
+  <ArcDialog
+    v-if="showArcDialog"
+    :app="app"
+    :manager="sketch"
+    @close="showArcDialog = false"
+  />
+
+  <!-- 样条对话框（悬浮） -->
   <SplineCurveDialog
     v-model:open="showSplineCurveDialog"
     :app="app"
@@ -69,19 +83,50 @@ const selectedSketch = ref<ExtrudeItem | null>(null);
 const previewMesh = ref<THREE.Mesh | null>(null);
 const customLineDir = ref<{ x: number, y: number, z: number } | null>(null);
 
+// 统一关闭：圆、圆弧、样条对话框（除 except 指定的外），并广播事件给对话框自处理
+function closeSketchDialogs(except?: 'circle' | 'arc' | 'spline', tool?: string) {
+  if (except !== 'circle') showCircleDialog.value = false;
+  if (except !== 'arc') showArcDialog.value = false;
+  if (except !== 'spline') showSplineCurveDialog.value = false;
+
+  // 广播事件（Arc/Circle/Spline 对话框内已监听，可自关闭）
+  try { window.dispatchEvent(new Event('sketch:close-dialogs')); } catch {}
+  if (tool) {
+    try { window.dispatchEvent(new CustomEvent('tool:changed', { detail: { tool } })); } catch {}
+  }
+}
+
+function handleStartSketchClick() {
+  closeSketchDialogs(undefined, 'startSketch');
+  sketch.startSketch();
+}
+function handleFinishSketchClick() {
+  closeSketchDialogs(undefined, 'select');
+  sketch.finishSketch();
+}
+function handlePointClick() {
+  closeSketchDialogs(undefined, 'point');
+  sketch.sketchSession.setTool('point');
+}
+function handleLineClick() {
+  closeSketchDialogs(undefined, 'line');
+  sketch.sketchSession.setTool('line');
+}
+
 function handleRectClick() {
+  closeSketchDialogs(undefined, 'rect');
   CommandBarFns.onRectClick(sketch, showRectDialog);
 }
 function handleCircleClick() {
-  CommandBarFns.onCircleClick(sketch, showCircleDialog);
+  // 打开“圆”对话框，先关闭其他两个
+  closeSketchDialogs('circle', 'circle');
+  showCircleDialog.value = true;
 }
 function handleRectModeSelect(mode: any) {
   CommandBarFns.onRectModeSelect(sketch, showRectDialog, mode);
 }
-function handleCircleModeSelect(mode: any) {
-  CommandBarFns.onCircleModeSelect(sketch, showCircleDialog, mode);
-}
 function handleExtrudeClick() {
+  closeSketchDialogs(undefined, 'extrude');
   CommandBarFns.onExtrudeClick(extrude, showExtrudeDialog, selectedSketch, CommandBarFns.sketchItemToExtrudeItem);
 }
 function handleExtrudeConfirm(params: any) {
@@ -92,24 +137,22 @@ function handleExtrudeClose() {
 }
 
 function handleArcClick() {
-  CommandBarFns.onArcClick(sketch, showArcDialog);
-}
-function handleArcModeSelect(mode: any) {
-  CommandBarFns.onArcModeSelect(sketch, showArcDialog, mode);
+  // 打开“圆弧”对话框，先关闭其他两个
+  closeSketchDialogs('arc', 'arc');
+  showArcDialog.value = true;
 }
 
-// 点击样条按钮：切工具并打开对话框
+// 样条对话框
 function handleSplineClick() {
-  sketch.sketchSession.setTool('spline');
+  closeSketchDialogs('spline', 'spline');
+  // 若 SplineCurveDialog 内部自行设置工具，这里可以不设；保留设置以兼容现有行为
+  try { sketch.sketchSession.setTool('spline'); } catch {}
   showSplineCurveDialog.value = true;
 }
-
-// 接收对话框选择（占位）
 function handleSplineModeSelect(mode: 'passPoint' | 'dependencePoint') {
-  // 如需同步到会话： sketch.sketchSession.setSplineMode?.(mode);
+  // 留空：SplineCurveDialog 内部处理鼠标/绘制逻辑
 }
 
-// mounted
 onMounted(() => {
   app.animate(() => {
     // 每帧逻辑（可选）
