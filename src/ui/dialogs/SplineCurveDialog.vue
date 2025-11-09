@@ -1,13 +1,13 @@
 <template>
   <div
     v-if="isOpen"
+    ref="dialogRef"
     class="fixed z-50 bg-gray-800 text-white rounded shadow-lg border border-gray-700 w-64"
-    :style="{ top: `${pos.y}px`, left: `${pos.x}px`, cursor: dragging ? 'move' : 'default' }"
-    @mousedown.self="startDrag"
+    :style="{ top: `${pos.y}px`, left: `${pos.x}px` }"
   >
     <div
       class="px-4 py-2 border-b border-gray-700 font-medium select-none cursor-move"
-      @mousedown.stop="startDrag"
+      @mousedown.stop="onDialogHeaderMouseDown"
     >
       样条曲线
     </div>
@@ -44,6 +44,7 @@
 <script setup lang="ts">
 import { computed, watch, ref, onMounted, onBeforeUnmount } from 'vue';
 import { SplineCurveItem } from '../../core/geometry/sketchs/SplineCurveItem';
+import {DialogMouseEventManager} from '../../core/managers/eventManager/sketchsEvent/DialogBaseEvents';
 
 type SplineModeUI = 'passPoint' | 'dependencePoint';
 
@@ -64,29 +65,13 @@ const emit = defineEmits<{
 
 // 拖动相关
 const pos = ref({ x: 16, y: 64 }); // 初始位置
-const dragging = ref(false);
-let dragOffset = { x: 0, y: 0 };
+const dialogRef = ref<HTMLElement | null>(null);
 
-function startDrag(e: MouseEvent) {
-  dragging.value = true;
-  dragOffset = {
-    x: e.clientX - pos.value.x,
-    y: e.clientY - pos.value.y,
-  };
-  window.addEventListener('mousemove', onDrag);
-  window.addEventListener('mouseup', stopDrag);
+function onDialogHeaderMouseDown(e: MouseEvent) {
+  if (dialogRef.value) {
+    DialogMouseEventManager.getInstance().registerDialogDrag(dialogRef.value, e);
+  }
 }
-function onDrag(e: MouseEvent) {
-  if (!dragging.value) return;
-  pos.value.x = e.clientX - dragOffset.x;
-  pos.value.y = e.clientY - dragOffset.y;
-}
-function stopDrag() {
-  dragging.value = false;
-  window.removeEventListener('mousemove', onDrag);
-  window.removeEventListener('mouseup', stopDrag);
-}
-onBeforeUnmount(stopDrag);
 
 // v-model:open 绑定（对话框悬浮，除取消/完成或外部切换工具才关闭）
 const isOpen = computed({
@@ -174,6 +159,11 @@ function onToolChanged(e: Event) {
 onMounted(() => {
   window.addEventListener('sketch:close-dialogs', externalClose);
   window.addEventListener('tool:changed', onToolChanged as EventListener);
+  if (dialogRef.value) {
+    dialogRef.value.style.left = pos.value.x + 'px';
+    dialogRef.value.style.top = pos.value.y + 'px';
+    dialogRef.value.style.position = 'fixed';
+  }
 });
 onBeforeUnmount(() => {
   window.removeEventListener('sketch:close-dialogs', externalClose);

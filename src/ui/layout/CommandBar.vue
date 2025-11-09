@@ -22,7 +22,13 @@
     <div class="flex-1"></div>
   </div>
 
-  <RectModeDialog v-if="showRectDialog" @select="handleRectModeSelect" @close="showRectDialog = false" />
+  <RectModeDialog
+    v-if="showRectDialog"
+    :app="app"
+    :manager="sketch"
+    @select="handleRectModeSelect"
+    @close="showRectDialog = false"
+  />
 
   <!-- 圆形对话框（悬浮） -->
   <CircleDialog
@@ -116,15 +122,47 @@ function handleLineClick() {
 function handleRectClick() {
   closeSketchDialogs(undefined, 'rect');
   CommandBarFns.onRectClick(sketch, showRectDialog);
+  // 强制保持对话框开启，防止外部逻辑把它置为 false
+  showRectDialog.value = true;
+}
+
+// 仅切换矩形模式，不关闭对话框（保持位置不变）
+function handleRectModeSelect(mode: 'two-point' | 'three-point') {
+  // 启用矩形工具（与直线等一致，确保捕获鼠标）
+  try { sketch.sketchSession.setTool('rect'); } catch {}
+  try { (sketch as any).setTool?.('rect'); } catch {}
+
+  // 设置矩形模式并进入绘制
+  try { (sketch as any)?.setRectMode?.(mode); } catch {}
+  try { (sketch.sketchSession as any)?.setRectMode?.(mode); } catch {}
+  try { (sketch as any).rectMode = mode; } catch {}
+  try { (sketch as any).isDrawing = true; } catch {}
+  try { (sketch as any).currentTool = 'rect'; } catch {}
+
+  // 不关闭对话框，不重置位置
+  try { app?.renderOnce?.(); } catch {}
 }
 function handleCircleClick() {
   // 打开“圆”对话框，先关闭其他两个
   closeSketchDialogs('circle', 'circle');
   showCircleDialog.value = true;
 }
-function handleRectModeSelect(mode: any) {
-  CommandBarFns.onRectModeSelect(sketch, showRectDialog, mode);
+function handleArcClick() {
+  // 打开“圆弧”对话框，先关闭其他两个
+  closeSketchDialogs('arc', 'arc');
+  showArcDialog.value = true;
 }
+// 样条对话框
+function handleSplineClick() {
+  closeSketchDialogs('spline', 'spline');
+  // 若 SplineCurveDialog 内部自行设置工具，这里可以不设；保留设置以兼容现有行为
+  try { sketch.sketchSession.setTool('spline'); } catch {}
+  showSplineCurveDialog.value = true;
+}
+function handleSplineModeSelect(mode: 'passPoint' | 'dependencePoint') {
+  // 留空：SplineCurveDialog 内部处理鼠标/绘制逻辑
+}
+
 function handleExtrudeClick() {
   closeSketchDialogs(undefined, 'extrude');
   CommandBarFns.onExtrudeClick(extrude, showExtrudeDialog, selectedSketch, CommandBarFns.sketchItemToExtrudeItem);
@@ -136,22 +174,6 @@ function handleExtrudeClose() {
   CommandBarFns.onExtrudeClose(app, previewMesh, showExtrudeDialog);
 }
 
-function handleArcClick() {
-  // 打开“圆弧”对话框，先关闭其他两个
-  closeSketchDialogs('arc', 'arc');
-  showArcDialog.value = true;
-}
-
-// 样条对话框
-function handleSplineClick() {
-  closeSketchDialogs('spline', 'spline');
-  // 若 SplineCurveDialog 内部自行设置工具，这里可以不设；保留设置以兼容现有行为
-  try { sketch.sketchSession.setTool('spline'); } catch {}
-  showSplineCurveDialog.value = true;
-}
-function handleSplineModeSelect(mode: 'passPoint' | 'dependencePoint') {
-  // 留空：SplineCurveDialog 内部处理鼠标/绘制逻辑
-}
 
 onMounted(() => {
   app.animate(() => {

@@ -1,13 +1,13 @@
 <template>
   <!-- 悬浮对话框：仅点击“取消”才关闭，可拖动 -->
   <div
+    ref="dialogRef"
     class="fixed z-50 bg-gray-800 text-white rounded shadow-lg border border-gray-700"
-    :style="{ top: `${pos.y}px`, left: `${pos.x}px`, cursor: dragging ? 'move' : 'default' }"
-    @mousedown.self="startDrag"
+    :style="{ left: `${pos.x}px`, top: `${pos.y}px`, position: 'fixed' }"
   >
     <div
       class="px-4 py-2 border-b border-gray-700 font-medium select-none cursor-move"
-      @mousedown.stop="startDrag"
+      @mousedown.stop="onDialogHeaderMouseDown"
     >
       圆形方式
     </div>
@@ -35,6 +35,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { DialogMouseEventManager } from '../../core/managers/eventManager/sketchsEvent/DialogBaseEvents';
 
 const props = defineProps<{
   app?: any
@@ -47,54 +48,50 @@ const emit = defineEmits<{
 
 const selectedMode = ref<'two-point' | 'three-point' | null>(null);
 
-// 拖动相关
 const pos = ref({ x: 16, y: 64 }); // 初始位置
-const dragging = ref(false);
-let dragOffset = { x: 0, y: 0 };
+const dialogRef = ref<HTMLElement | null>(null);
 
-function startDrag(e: MouseEvent) {
-  dragging.value = true;
-  dragOffset = {
-    x: e.clientX - pos.value.x,
-    y: e.clientY - pos.value.y,
+function onDialogHeaderMouseDown(e: MouseEvent) {
+  if (!dialogRef.value) return;
+  // 拖动时动态获取宽度，限制不会超出窗口
+  const dialogWidth = dialogRef.value.offsetWidth || 256;
+  const dialogHeight = dialogRef.value.offsetHeight || 180;
+  const rect = dialogRef.value.getBoundingClientRect();
+  const dragOffset = {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top,
   };
-  window.addEventListener('mousemove', onDrag);
-  window.addEventListener('mouseup', stopDrag);
+
+  function onMouseMove(ev: MouseEvent) {
+    let x = ev.clientX - dragOffset.x;
+    let y = ev.clientY - dragOffset.y;
+    x = Math.max(0, Math.min(x, window.innerWidth - dialogWidth));
+    y = Math.max(0, Math.min(y, window.innerHeight - dialogHeight));
+    pos.value.x = x;
+    pos.value.y = y;
+  }
+  function onMouseUp() {
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+  }
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp);
 }
-function onDrag(e: MouseEvent) {
-  if (!dragging.value) return;
-  pos.value.x = e.clientX - dragOffset.x;
-  pos.value.y = e.clientY - dragOffset.y;
-}
-function stopDrag() {
-  dragging.value = false;
-  window.removeEventListener('mousemove', onDrag);
-  window.removeEventListener('mouseup', stopDrag);
-}
-onBeforeUnmount(stopDrag);
 
 function setSelected(mode: 'two-point' | 'three-point') {
   selectedMode.value = mode;
-
-  // 切到圆工具并设置模式（兼容多实现）
   try { props.manager?.sketchSession?.setTool('circle'); } catch {}
   try { props.manager?.setTool?.('circle'); } catch {}
-
   try { (props.manager as any)?.setCircleMode?.(mode); } catch {}
   try { (props.manager?.sketchSession as any)?.setCircleMode?.(mode); } catch {}
   try { (props.manager?.sketchSession as any).circleMode = mode; } catch {}
   try { (props.manager as any).circleMode = mode; } catch {}
-
-  // 标记处于绘制状态（可选）
   try { (props.manager as any).isDrawing = true; } catch {}
   try { (props.manager as any).currentTool = 'circle'; } catch {}
-
-  // 请求一次渲染（可选）
   try { props.app?.renderOnce?.(); } catch {}
 }
 
 function onCancel() {
-  // 停止圆形绘制逻辑并切回选择
   try {
     const mgr = props.manager as any;
     if (mgr?.previewItem) {

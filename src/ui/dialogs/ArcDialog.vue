@@ -1,12 +1,12 @@
 <template>
   <div
+    ref="dialogRef"
     class="fixed z-50 bg-gray-800 text-white rounded shadow-lg border border-gray-700 w-64"
-    :style="{ top: `${pos.y}px`, left: `${pos.x}px`, cursor: dragging ? 'move' : 'default' }"
-    @mousedown.self="startDrag"
+    :style="{ top: `${pos.y}px`, left: `${pos.x}px` }"
   >
     <div
       class="px-3 py-2 border-b border-gray-700 font-medium select-none cursor-move"
-      @mousedown.stop="startDrag"
+      @mousedown.stop="onDialogHeaderMouseDown"
     >
       圆弧方式
     </div>
@@ -34,6 +34,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { DialogMouseEventManager } from '../../core/managers/eventManager/sketchsEvent/DialogBaseEvents';
 
 const props = defineProps<{
   app?: any
@@ -46,29 +47,21 @@ const selectedMode = ref<'threePoints' | 'centerStartEnd' | null>(null);
 
 // 拖动相关
 const pos = ref({ x: 16, y: 64 }); // 初始位置
-const dragging = ref(false);
-let dragOffset = { x: 0, y: 0 };
+const dialogRef = ref<HTMLElement | null>(null);
 
-function startDrag(e: MouseEvent) {
-  dragging.value = true;
-  dragOffset = {
-    x: e.clientX - pos.value.x,
-    y: e.clientY - pos.value.y,
-  };
-  window.addEventListener('mousemove', onDrag);
-  window.addEventListener('mouseup', stopDrag);
+function onDialogHeaderMouseDown(e: MouseEvent) {
+  if (dialogRef.value) {
+    DialogMouseEventManager.getInstance().registerDialogDrag(dialogRef.value, e);
+  }
 }
-function onDrag(e: MouseEvent) {
-  if (!dragging.value) return;
-  pos.value.x = e.clientX - dragOffset.x;
-  pos.value.y = e.clientY - dragOffset.y;
-}
-function stopDrag() {
-  dragging.value = false;
-  window.removeEventListener('mousemove', onDrag);
-  window.removeEventListener('mouseup', stopDrag);
-}
-onBeforeUnmount(stopDrag);
+
+onMounted(() => {
+  if (dialogRef.value) {
+    dialogRef.value.style.left = pos.value.x + 'px';
+    dialogRef.value.style.top = pos.value.y + 'px';
+    dialogRef.value.style.position = 'fixed';
+  }
+});
 
 function setSelected(mode: 'threePoints' | 'centerStartEnd') {
   selectedMode.value = mode;
