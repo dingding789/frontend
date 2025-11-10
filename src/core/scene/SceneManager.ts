@@ -7,7 +7,7 @@ import { SceneLights } from './SceneLights';
 import { SceneCamera } from './SceneCamera';
 import { SceneRenderer } from './SceneRenderer';
 import { SceneControls } from './SceneControls';
-
+import { EventManager } from '../managers/eventManager/EventManager';
 interface SceneManagerOptions {
   backgroundColor?: number;
   axesHelperSize?: number;
@@ -28,7 +28,7 @@ class SceneManager {
   public camera: THREE.PerspectiveCamera;
   public renderer: THREE.WebGLRenderer;
   public controls: SceneControls;
-
+  public eventManager: EventManager;
   /** 默认光源 */
   public ambientLight!: THREE.AmbientLight;
   public directionalLight!: THREE.DirectionalLight;
@@ -74,9 +74,12 @@ class SceneManager {
     this.directionalLight = lights.directionalLight;
     this.scene.add(this.ambientLight);
     this.scene.add(this.directionalLight);
-
+    // 事件管理器
+    this.eventManager = new EventManager(this, this.sketchMgr, this.sketchMgr.sketchSession);
+    this.eventManager.registerAll();
+    this.eventManager.bindAll();
     // 绑定事件
-    this.bindEvents();
+    //this.bindEvents();
   }
 
   /** 获取单例实例 */

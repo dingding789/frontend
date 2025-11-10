@@ -38,8 +38,8 @@ export class CommandBarFns {
     sketch.sketchSession.setTool('arc');
     if (showArcDialog && typeof showArcDialog === 'object' && 'value' in showArcDialog) {
       showArcDialog.value = true;
-      }
     }
+  }
 
     static onArcModeSelect(sketch, showArcDialog, mode) {
       sketch.sketchSession.setArcMode(mode);

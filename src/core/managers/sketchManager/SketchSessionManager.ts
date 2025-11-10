@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { SketchTool} from './SketchManager';
 import { ref } from 'vue';
-import { bindEvents,bindMouseMove,bindCancelContinuous } from '../eventManager/sketchsEvent';
-import { RectPreviewItem } from '../../geometry/sketchs/RectPreviewItem';
-import { Rect3PreviewItem } from '../../geometry/sketchs/Rect3PreviewItem';
 
+
+import { RectItem} from '../../geometry/sketchs/RectItem';
+import { EventManager } from '../eventManager/EventManager';
 /**
  * SketchSessionManager
  * 管理草图绘制会话状态，包括：
@@ -36,17 +36,13 @@ export class SketchSessionManager {
     public arcMode: 'threePoints' | 'centerStartEnd' = 'threePoints';
     // 样条绘制模式：'passPoint' | 'dependencePoint'，提供默认值以避免未声明属性错误
     public SpineCurveMode: 'passPoint' | 'dependencePoint' = 'passPoint';
-
     /**
      * 构造函数
      * 注册预览构造器，并绑定鼠标事件
      */
     constructor(private app: any, private manager: any) {
-        this.manager.RectPreviewItem = RectPreviewItem;
-        this.manager.Rect3PreviewItem = Rect3PreviewItem;
-        bindEvents(this.app, this.manager, this);
-        bindMouseMove(this.app, this.manager, this);
-        bindCancelContinuous(this.app, this.manager, this);
+
+
     }
 
     /**
