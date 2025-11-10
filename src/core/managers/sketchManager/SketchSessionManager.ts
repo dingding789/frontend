@@ -36,8 +36,6 @@ export class SketchSessionManager {
     public arcMode: 'threePoints' | 'centerStartEnd' = 'threePoints';
     // 样条绘制模式：'passPoint' | 'dependencePoint'，提供默认值以避免未声明属性错误
     public SpineCurveMode: 'passPoint' | 'dependencePoint' = 'passPoint';
-
-    public eventManager: EventManager;
     /**
      * 构造函数
      * 注册预览构造器，并绑定鼠标事件
@@ -45,12 +43,6 @@ export class SketchSessionManager {
     constructor(private app: any, private manager: any) {
 
 
-        this.eventManager = new EventManager(app, this.manager, this);
-        this.eventManager.registerAll();
-        this.eventManager.bindAll();
-
-        //bindMouseMove(this.app, this.manager, this);
-        //bindCancelContinuous(this.app, this.manager, this);
     }
 
     /**

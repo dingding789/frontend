@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 /**
  * 鼠标事件基类，负责事件绑定和解绑
  */
@@ -31,3 +33,4 @@ export abstract class MouseEventBase {
     this.app.renderer.domElement.removeEventListener(this.eventType(), this.handler, false);
   }
 }
+

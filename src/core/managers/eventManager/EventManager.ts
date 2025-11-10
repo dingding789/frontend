@@ -1,9 +1,10 @@
 
 import { MouseEventBase } from './MouseEventBase';
 import { SketchClickEvent } from './sketchsEvent/SketchClickEvent';
-import { MouseMoveEvent, MouseDownEvent, MouseUpEvent, MouseDoubleClickEvent } from './sketchsEvent/MouseMoveEvent';
+import { SketchMouseMove, SketchMouseDown, SketchMouseUp, SketchMouseDoubleClick } from './sketchsEvent/SketchMouseMove';
 import { KeydownEvent } from './sketchsEvent/KeydownEvent';
 import { KeyboardEventBase } from './KeyboardEventBase';
+import { WindowEvent } from './WindowEvent';
 export class EventManager {
   private app: any;
   private session: any;
@@ -24,11 +25,13 @@ export class EventManager {
     const common = { app: this.app, manager: this.manager, session: this.session };
 
 
-    this.events.set('move', new MouseMoveEvent(common.app, common.manager, common.session));
-    this.events.set('down', new MouseDownEvent(common.app, common.manager, common.session));
-    this.events.set('up', new MouseUpEvent(common.app, common.manager, common.session));
+    this.events.set('move', new SketchMouseMove(common.app, common.manager, common.session));
+    this.events.set('down', new SketchMouseDown(common.app, common.manager, common.session));
+    this.events.set('up', new SketchMouseUp(common.app, common.manager, common.session));
     this.events.set('click', new SketchClickEvent(common.app, common.manager, common.session));
     this.events.set('keydown', new KeydownEvent(common.app, common.manager, common.session));
+    this.events.set('window-event', new WindowEvent(common.app, common.manager, common.session));
+  
   }
 
   /** 绑定所有事件 */

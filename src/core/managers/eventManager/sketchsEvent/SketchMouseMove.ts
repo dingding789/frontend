@@ -2,10 +2,10 @@
 import * as THREE from 'three';
 import { MouseEventBase } from '../MouseEventBase';
 import { SplineCurveItem } from '../../../geometry/sketchs/SplineCurveItem';
-
+import { SketchMouseEventBase } from './SketchMouseEventBase';
 
 // -------------------- 鼠标移动事件 --------------------
-export class MouseMoveEvent extends MouseEventBase {
+export class SketchMouseMove extends SketchMouseEventBase {
   protected eventType(): string {
     return 'mousemove';
   }
@@ -50,7 +50,7 @@ export class MouseMoveEvent extends MouseEventBase {
 
 
 // -------------------- 鼠标按下事件 --------------------
-export class MouseDownEvent extends MouseEventBase {
+export class SketchMouseDown extends SketchMouseEventBase {
   protected eventType(): string {
     return 'mousedown';
   }
@@ -83,7 +83,7 @@ export class MouseDownEvent extends MouseEventBase {
 
 
 // -------------------- 鼠标抬起事件 --------------------
-export class MouseUpEvent extends MouseEventBase {
+export class SketchMouseUp extends SketchMouseEventBase {
   protected eventType(): string {
     return 'mouseup';
   }
@@ -96,7 +96,7 @@ export class MouseUpEvent extends MouseEventBase {
 
 
 // -------------------- 双击事件 --------------------
-export class MouseDoubleClickEvent extends MouseEventBase {
+export class SketchMouseDoubleClick extends SketchMouseEventBase {
   protected eventType(): string {
     return 'dblclick';
   }

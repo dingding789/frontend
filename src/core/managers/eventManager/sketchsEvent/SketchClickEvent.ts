@@ -18,10 +18,11 @@ export class SketchClickEvent extends SketchMouseEventBase {
   protected eventType(): string {
     return 'click';
   }
-
+  
   protected handleEvent(e: MouseEvent): void {
     const { app, manager, session } = this;
 
+    console.log('SketchClickEvent');
     if (!session.isSketching.value) return;
 
     // 拖拽刚结束时抑制一次 click
