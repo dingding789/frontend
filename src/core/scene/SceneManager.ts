@@ -8,6 +8,7 @@ import { SceneCamera } from './SceneCamera';
 import { SceneRenderer } from './SceneRenderer';
 import { SceneControls } from './SceneControls';
 import { EventManager } from '../managers/eventManager/EventManager';
+import  { initWasm } from '../../wasm/wasm.ts';
 interface SceneManagerOptions {
   backgroundColor?: number;
   axesHelperSize?: number;
@@ -80,6 +81,7 @@ class SceneManager {
     this.eventManager.bindAll();
     // 绑定事件
     //this.bindEvents();
+    initWasm();
   }
 
   /** 获取单例实例 */
