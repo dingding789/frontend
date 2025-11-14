@@ -12,6 +12,9 @@ import {
   HighlightManager
 } from './index';
 
+
+import { gp_Pnt } from '../../../wasm/chili-wasm';
+
 // ---------------- 工具 & 类型 ----------------
 export type SketchTool = 'point' | 'line' | 'arc' | 'rect' | 'circle' | 'spline'; // 草图工具类型，新增circle
 export type SketchPlaneName = 'XY' | 'YZ' | 'XZ'; // 草图平面名称
@@ -88,6 +91,10 @@ export default class SketchManager {
 
     // 渲染一次，确保平面显示
     this.app.renderOnce();
+    // 测试 WASM 是否正常工作
+    const p: gp_Pnt = new wasm.gp_Pnt(0, 0, 0); // 正确用法，创建 gp_Pnt 实例
+    console.log('Created gp_Pnt:', p.x, p.y, p.z);
+
   }
 
   /**
