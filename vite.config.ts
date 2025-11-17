@@ -27,6 +27,14 @@ export default defineConfig(({ mode }) => {
       port: 3001,
       open: true,
     },
+    // 显式配置 CSS Modules（Vite 默认已支持 *.module.css）
+    css: {
+      modules: {
+        scopeBehaviour: 'local',                // 'local' 或 'global'
+        generateScopedName: '[name]__[local]___[hash:base64:5]', // 可读的 class 名
+        localsConvention: 'camelCaseOnly',      // 导出为 camelCase 名称
+      },
+    },
     define: {
       API_BASE: JSON.stringify(apiBase),
     },
