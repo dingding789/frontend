@@ -55,16 +55,14 @@
   />
 
   <ExtrudeDialog
-    v-if="showExtrudeDialog"
-    :selectedSketch="selectedSketch"
-    @preview="CommandBarFns.onExtrudePreview(app, extrude, selectedSketch, previewMesh, $event)"
-    @confirm="handleExtrudeConfirm($event)"
-    @close="handleExtrudeClose()"
+    v-if="extrude.dialogVisible"
+    :extrudeMgr="app.extrudeMgr"
+    :selectedSketch="extrude.selectedSketch"
   />
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, reactive } from 'vue';
 import AppManager from '../../core/scene/SceneManager';
 import RectModeDialog from '../dialogs/RectModeDialog.vue';
 import CircleDialog from '../dialogs/CircleDialog.vue';
@@ -77,17 +75,14 @@ import SplineCurveDialog from '../dialogs/SplineCurveDialog.vue';
 
 const app = AppManager.getInstance();
 const sketch = app.sketchMgr;
-const extrude = app.extrudeMgr;
+const extrude = reactive(app.extrudeMgr); // 让其他简单属性也可响应（可选）
 
 const showRectDialog = ref(false);
 const showCircleDialog = ref(false);
-const showExtrudeDialog = ref(false);
 const showArcDialog = ref(false);
 const showSplineCurveDialog = ref(false);
 
-const selectedSketch = ref<ExtrudeItem | null>(null);
-const previewMesh = ref<THREE.Mesh | null>(null);
-const customLineDir = ref<{ x: number, y: number, z: number } | null>(null);
+
 
 // 统一关闭：圆、圆弧、样条对话框（除 except 指定的外），并广播事件给对话框自处理
 function closeSketchDialogs(except?: 'circle' | 'arc' | 'spline', tool?: string) {
@@ -165,13 +160,8 @@ function handleSplineModeSelect(mode: 'passPoint' | 'dependencePoint') {
 
 function handleExtrudeClick() {
   closeSketchDialogs(undefined, 'extrude');
-  CommandBarFns.onExtrudeClick(extrude, showExtrudeDialog, selectedSketch, CommandBarFns.sketchItemToExtrudeItem);
-}
-function handleExtrudeConfirm(params: any) {
-  CommandBarFns.onExtrudeConfirm(app, extrude, selectedSketch, previewMesh, showExtrudeDialog, params);
-}
-function handleExtrudeClose() {
-  CommandBarFns.onExtrudeClose(app, previewMesh, showExtrudeDialog);
+  extrude.dialogVisible = true;
+  extrude.enablePickMode();
 }
 
 

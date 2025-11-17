@@ -9,6 +9,7 @@ import { SceneRenderer } from './SceneRenderer';
 import { SceneControls } from './SceneControls';
 import { EventManager } from '../managers/eventManager/EventManager';
 import  { initWasm } from '../../wasm/wasm.ts';
+
 interface SceneManagerOptions {
   backgroundColor?: number;
   axesHelperSize?: number;
@@ -67,7 +68,7 @@ class SceneManager {
     this.controls = new SceneControls(this.camera, this.renderer.domElement);
 
     this.sketchMgr = new SketchManager(this);
-    this.extrudeMgr = new ExtrudeManager(this);
+    this.extrudeMgr = new ExtrudeManager(this,this.sketchMgr);
 
     // 光源
     const lights = new SceneLights(this.enableShadows);
@@ -81,7 +82,8 @@ class SceneManager {
     this.eventManager.bindAll();
     // 绑定事件
     //this.bindEvents();
-    initWasm();
+    // 启用拉伸交互（给画布绑定点击事件）
+
   }
 
   /** 获取单例实例 */

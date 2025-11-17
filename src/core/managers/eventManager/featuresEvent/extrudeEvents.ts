@@ -3,6 +3,7 @@
 // 仅处理 Extrude 相关的事件，不涉及 UI 组件
 
 import * as THREE from 'three';
+import { MouseEventBase } from '../MouseEventBase';
 
 export class ExtrudeEvents {
   /**
@@ -66,29 +67,54 @@ export class ExtrudeEvents {
 }
 
 /**
- * 拉伸体鼠标点击事件处理
- * @param app THREE应用管理器
- * @param manager 草图管理器
- * @param event 鼠标点击事件
+ * 小型工具类：继承 MouseEventBase 使用其 raycast / getNDCFromEvent 实用方法
+ * 提供一次性拾取（不绑定事件），用于替换原有的基于手动 Raycaster 的实现
+ */
+ export class ExtrudePicker extends MouseEventBase {
+  public raycast(event: PointerEvent): any {
+    // Call the base class raycast if it exists
+    return super['raycast'] ? super['raycast'](event) : null;
+  }
+
+  // 改为 pointerdown
+  protected eventType(): string {
+    return 'pointerdown';
+  }
+
+  // 使用 PointerEvent 签名
+  protected handleEvent(e: PointerEvent): void {
+    console.log('ExtrudePicker.handleEvent', e);
+    this.pickOnce(e);
+  }
+
+  /**
+   * 执行一次拾取并返回对应的草图项或 null
+   * 兼容原来 onExtrudeMouseClick 的行为（使用 manager.allSketchItems）
+   */
+  pickOnce(event: MouseEvent | PointerEvent, onSketchPicked?: (sketch: any) => void) {
+    // 使用基类的 raycast 方法进行拾取
+    const ndEvent = event as PointerEvent;
+    const intersect = this.raycast(ndEvent);
+    if (!intersect) return null;
+
+    const obj = intersect.object;
+    // manager 预计含有 allSketchItems（二维数组）
+    const allItems = (this.manager?.allSketchItems) ? this.manager.allSketchItems : [];
+    // 扁平查找与原实现一致
+    const hit = allItems.flat().find(j => j.object3D === obj) ?? null;
+    if (hit && typeof onSketchPicked === 'function') onSketchPicked(hit);
+    return hit;
+  }
+}
+
+/**
+ * 兼容函数：保持原 onExtrudeMouseClick API，但内部使用 ExtrudePicker（继承 MouseEventBase）
+ * @param app 应用管理器
+ * @param manager 草图管理器（期望包含 allSketchItems）
+ * @param event 鼠标/指针事件
  * @param onSketchPicked 选中回调
  */
 export function onExtrudeMouseClick(app, manager, event, onSketchPicked?: (sketch: any) => void) {
-  const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
-  const rect = app.renderer.domElement.getBoundingClientRect();
-  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-  raycaster.setFromCamera(mouse, app.camera);
-  const allItems = manager.allSketchItems;
-  const objects = allItems.flat().map(i => i.object3D).filter(Boolean) as THREE.Object3D[];
-  const intersects = raycaster.intersectObjects(objects);
-  if (intersects.length > 0) {
-    const obj = intersects[0].object;
-    const hit = allItems.flat().find(j => j.object3D === obj) ?? null;
-    if (hit && onSketchPicked) {
-      onSketchPicked(hit);
-    }
-    return hit;
-  }
-  return null;
+  const picker = new ExtrudePicker(app, manager, null);
+  return picker.pickOnce(event, onSketchPicked);
 }

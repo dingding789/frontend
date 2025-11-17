@@ -64,14 +64,11 @@ export class SketchDataManager {
     return await this.uploadService.upload(json);
   }
 
-  /** 上传单个矩形 */
-  async uploadSingleRect(compact = true) {
-    return await this.uploadService.uploadSingleRect(compact);
-  }
-
   /** 加载所有草图 */
   async loadAll() {
+    console.log('草图列表', this.manager.allSketchItems);
     return await this.syncService.loadAll();
+    
   }
 
   /** 加载单个草图 */

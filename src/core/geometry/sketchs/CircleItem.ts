@@ -172,58 +172,6 @@ export class CircleItem extends SketchItem {
       radius: this.radius ?? 0
     };
   }
-  // 绘制圆的工具逻辑处理
-  static handleCircleTool(app: any, manager: any, intersectionPoint: THREE.Vector3, mode: 'two-point' | 'three-point', plane: THREE.Plane) {
-    const selectedPlaneNormal = plane?.normal.clone() ?? new THREE.Vector3(0, 0, 1);
-    const { previewItem } = manager;
-
-    if (mode === 'two-point') {
-      if (!previewItem || !(previewItem instanceof CircleItem) || previewItem.mode !== 'two-point') {
-        manager.previewItem = new CircleItem('two-point', intersectionPoint.clone(), intersectionPoint.clone(), undefined, selectedPlaneNormal);
-      } else {
-        const circleItem = manager.previewItem as CircleItem;
-        circleItem.point2 = intersectionPoint.clone();
-        circleItem.center = circleItem.point1.clone();
-        circleItem.radius = circleItem.point1.distanceTo(circleItem.point2);
-        circleItem.remove(app.scene);
-        circleItem.draw(app.scene);
-        manager.sketchItems.value.push(circleItem);
-        manager.previewItem = null;
-        app.renderOnce();
-      }
-    } else {
-      // three-point
-      if (!previewItem || !(previewItem instanceof CircleItem) || previewItem.mode !== 'three-point') {
-        // 首次点击：仅确定第一个点；不要让 point2=point1，避免退化
-        const circleItem = new CircleItem('three-point', intersectionPoint.clone(), intersectionPoint.clone(), undefined, selectedPlaneNormal);
-        circleItem.point2 = undefined;
-        circleItem.point3 = undefined;
-        circleItem.center = circleItem.point1.clone();
-        circleItem.radius = 0;
-        manager.previewItem = circleItem;
-      } else {
-        const circleItem = manager.previewItem as CircleItem;
-        if (!circleItem.point2) {
-          // 第二次点击：确定第二点；之后鼠标移动预览第三点
-          circleItem.point2 = intersectionPoint.clone();
-          circleItem.center = circleItem.point1.clone();
-          circleItem.radius = circleItem.point1.distanceTo(circleItem.point2);
-          app.renderOnce();
-        } else if (!circleItem.point3) {
-          // 第三次点击：确定第三点并落地
-          circleItem.point3 = intersectionPoint.clone();
-          const circleBy3 = calcCircleBy3PointsOnPlane(circleItem.point1, circleItem.point2, circleItem.point3, selectedPlaneNormal);
-          circleItem.center = circleBy3.center;
-          circleItem.radius = circleBy3.radius;
-          circleItem.remove(app.scene);
-          circleItem.draw(app.scene);
-          manager.sketchItems.value.push(circleItem);
-          manager.previewItem = null;
-          app.renderOnce();
-        }
-      }
-    }
-  }
 }
 
 // 通过三点计算圆心和半径（带平面法向）
@@ -268,16 +216,16 @@ export function calcCircleBy3PointsOnPlane(
   return { center, radius };
 }
 
-// 将从后端还原的草图项（尚未 draw 的）统一绘制出来
-export function rehydrateSketches(app: any, manager: any) {
-  const sketchItems = (manager.sketchItems?.value ?? []) as any[];
-  for (const sketchItem of sketchItems) {
-    if (!sketchItem) continue;
-    if (!sketchItem.object3D && typeof sketchItem.draw === 'function') {
-      try { sketchItem.draw(app.scene); } catch {}
-    }
-  }
-  app?.renderOnce?.();
-}
+// // 将从后端还原的草图项（尚未 draw 的）统一绘制出来
+// export function rehydrateSketches(app: any, manager: any) {
+//   const sketchItems = (manager.sketchItems?.value ?? []) as any[];
+//   for (const sketchItem of sketchItems) {
+//     if (!sketchItem) continue;
+//     if (!sketchItem.object3D && typeof sketchItem.draw === 'function') {
+//       try { sketchItem.draw(app.scene); } catch {}
+//     }
+//   }
+//   app?.renderOnce?.();
+// }
 
 

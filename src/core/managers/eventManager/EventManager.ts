@@ -4,6 +4,7 @@ import { SketchMouseMove, SketchMouseDown, SketchMouseUp, SketchMouseDoubleClick
 import { KeydownEvent } from './sketchsEvent/KeydownEvent';
 import { KeyboardEventBase } from './KeyboardEventBase';
 import { WindowEvent } from './WindowEvent';
+import { ExtrudePicker } from './featuresEvent/ExtrudeEvents';
 // 对话框拖拽事件
 import { DialogMouseDownEvent, DialogMouseMoveEvent, DialogMouseUpEvent } from './sketchsEvent/DialogBaseEvents';
 
@@ -51,20 +52,21 @@ export class EventManager {
    */
   public registerAll() {
     const common = { app: this.app, manager: this.manager, session: this.session };
+    this.events.set('pointerdown', new LazyEvent(ExtrudePicker, [common.app, common.manager, common.session]));
 
     // 直接实例化的事件（通常安全）
-    this.events.set('move', new SketchMouseMove(common.app, common.manager, common.session));
-    this.events.set('down', new SketchMouseDown(common.app, common.manager, common.session));
-    this.events.set('up', new SketchMouseUp(common.app, common.manager, common.session));
-    this.events.set('click', new SketchClickEvent(common.app, common.manager, common.session));
-    this.events.set('keydown', new KeydownEvent(common.app, common.manager, common.session));
-    this.events.set('window-event', new WindowEvent(common.app, common.manager, common.session));
-
+    this.events.set('move', new LazyEvent(SketchMouseMove, [common.app, common.manager, common.session]));
+    this.events.set('down', new LazyEvent(SketchMouseDown, [common.app, common.manager, common.session]));
+    this.events.set('up', new LazyEvent(SketchMouseUp, [common.app, common.manager, common.session]));
+    this.events.set('click', new LazyEvent(SketchClickEvent, [common.app, common.manager, common.session]));
+    this.events.set('keydown', new LazyEvent(KeydownEvent, [common.app, common.manager, common.session]));
+    this.events.set('window-event', new LazyEvent(WindowEvent, [common.app, common.manager, common.session]));
+  
     // 立即“注册”对话框相关事件，但延迟实例化以避免构造期错误
     this.events.set('dialog-mousedown', new LazyEvent(DialogMouseDownEvent, [common.app, common.manager, common.session]));
     this.events.set('dialog-mousemove', new LazyEvent(DialogMouseMoveEvent, [common.app, common.manager, common.session]));
     this.events.set('dialog-mouseup', new LazyEvent(DialogMouseUpEvent, [common.app, common.manager, common.session]));
-  }
+      }
 
   /** 绑定所有事件（此处会触发 LazyEvent 的真实实例化并 bind） */
   public bindAll() {
