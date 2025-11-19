@@ -14,6 +14,7 @@ export class HighlightManager {
   private allItems: SketchItem[] = []; // 所有草图项的集合
   private raycaster = new THREE.Raycaster(); // 用于射线检测的 Raycaster
   private mouse = new THREE.Vector2(); // 用于存储鼠标位置的 Vector2
+  private persistent = false; // 是否为持久高亮（由外部显式触发）
 
   /**
    * 构造函数，接收 app 和 manager 参数并设置鼠标点击事件监听器
@@ -29,6 +30,47 @@ export class HighlightManager {
    * 设置所有草图项
    * @param items 草图项数组
    */
+
+   /**
+   * 设置所有草图项
+   * @param sketchid 草图id
+   */
+
+  public async highlightBySketchId(id: number | string) {
+    try {
+      // 先尝试通过 manager.sketchList 找到对应的索引（allSketchItems 的数组顺序与 sketchList 对应）
+      const list = this.manager.sketchList?.value || [];
+      let found: SketchItem[] | null = null;
+      let idx = list.findIndex((it: any) => String(it.id) === String(id));
+      if (idx >= 0 && this.manager.allSketchItems && this.manager.allSketchItems[idx]) {
+        found = this.manager.allSketchItems[idx];
+      }
+      // 如果未找到，尝试通过 manager.sketchData.loadById 加载该草图（如果可用）
+      if (!found && this.manager.sketchData && typeof this.manager.sketchData.loadById === 'function') {
+        // 如果尚未加载该草图，尝试通过后端加载（loadById）
+        await this.manager.sketchData.loadById(Number(id));
+        // 加载后，sketchList 与 allSketchItems 应已更新，重新查找索引
+        const list2 = this.manager.sketchList?.value || [];
+        const newIdx = list2.findIndex((it: any) => String(it.id) === String(id));
+        if (newIdx >= 0 && this.manager.allSketchItems && this.manager.allSketchItems[newIdx]) {
+          found = this.manager.allSketchItems[newIdx];
+        }
+      }
+      // 如果找到则高亮并渲染（持久高亮）
+      if (found) {
+        this.highlight(found, true);
+        this.app.renderOnce();
+      } else {
+        // 未找到则取消持久高亮并渲染
+        this.highlight(null, false);
+        this.app.renderOnce();
+      }
+    } catch (err) {
+      console.error('[HighlightManager] highlightBySketchId 错误', err);
+    }
+  }
+
+
   setItems(items: SketchItem[]) {
     this.allItems = items; // 将传入的草图项数组赋值给 allItems 属性
   }
@@ -37,52 +79,86 @@ export class HighlightManager {
    * 高亮指定的草图项数组，如果已有高亮项则恢复其正常颜色
    * @param items 需要高亮的草图项数组或 null
    */
-  highlight(items: SketchItem[] | null) {
-    // 恢复之前高亮的项目颜色
+  highlight(items: SketchItem[] | null, persistent = false) {
+    // 先恢复上一次的高亮颜色
     if (Array.isArray(this.highlightedItem)) {
       this.highlightedItem.forEach(prevItem => {
-        const mat = (prevItem.object3D as any)?.material;
-        if (mat?.color) mat.color.setHex(this.normalColor);
+        const prevMat = (prevItem.object3D as any)?.material;
+        if (prevMat?.color) prevMat.color.setHex(this.normalColor);
+        if (prevMat) prevMat.needsUpdate = true;
       });
     } else if (this.highlightedItem) {
       const mat = (this.highlightedItem.object3D as any)?.material;
       if (mat?.color) mat.color.setHex(this.normalColor);
+      if (mat) mat.needsUpdate = true;
     }
 
-    // 更新当前高亮项
+    // 更新当前高亮项与持久标记
     this.highlightedItem = items;
+    this.persistent = !!(items && persistent);
 
-    // 设置新的高亮颜色
+    // 设置新的高亮颜色（仅高亮当前一组）
     if (items && items.length > 0) {
-      items.forEach(it => {
+      items.forEach((it) => {
         const mat = (it.object3D as any)?.material;
         if (mat?.color) mat.color.setHex(this.highlightColor);
+        if (mat) mat.needsUpdate = true;
       });
     }
+
+    // 强制渲染
+    try { this.app.renderOnce(); } catch {}
+    setTimeout(()=>{ try{ this.app.renderOnce(); }catch{} }, 40);
+    setTimeout(()=>{ try{ this.app.renderOnce(); }catch{} }, 150);
   }
 
   /**
-   * 检测射线相交的草图项并高亮
-   * @param raycaster THREE 射线检测器
-   * @param items 草图项二维数组（历史+当前）
-   * @returns 命中的草图项或 null
+   * 检测射线相交的草图项并高亮（支持子对象命中，点击画布空白处取消）
    */
   pick(raycaster: THREE.Raycaster, items: SketchItem[][]) {
-    // 将草图项转换为 THREE.Object3D 数组，并过滤掉 null 值
-    const objects = items.flat().map(i => i.object3D).filter(Boolean) as THREE.Object3D[];
-    // 使用射线检测器检测与 objects 的相交
-    const intersects = raycaster.intersectObjects(objects);
-    // 如果有相交的物体，高亮第一个相交的草图项
-    if (intersects.length > 0) {
-      const obj = intersects[0].object;
-      // 找到与相交物体对应的 SketchItem
-      const hit = items.find(i => i.find(j => j.object3D === obj))?? null;
-      this.highlight(hit); // 高亮找到的草图项
-      return hit; // 返回找到的草图项
+    const roots = items.flat().map(i => i.object3D).filter(Boolean) as THREE.Object3D[];
+    const intersects = raycaster.intersectObjects(roots, true);
+
+    // 未命中：无条件取消高亮并通知 UI
+    if (intersects.length === 0) {
+      this.highlight(null, false);
+      try { this.manager?.emit?.('sketch-picked', null); } catch {}
+      return null;
     }
-    // 如果没有相交的物体，取消高亮
-    this.highlight(null);
-    return null; // 返回 null
+
+    const hitObj = intersects[0].object;
+
+    // 找到所属草图组
+    let hitGroup: SketchItem[] | null = null;
+    let groupIndex = -1;
+    for (let i = 0; i < items.length; i++) {
+      const group = items[i];
+      if (group && group.some(it => this.isDescendantOf(hitObj, it.object3D as THREE.Object3D))) {
+        hitGroup = group;
+        groupIndex = i;
+        break;
+      }
+    }
+    if (!hitGroup) return null;
+
+    // 与 sketchList 顺序对应获取 id
+    const id = this.manager?.sketchList?.value?.[groupIndex]?.id ?? null;
+
+    // 命中草图：直接高亮（不再因再次点击同一草图而取消）
+    this.highlight(hitGroup, true);
+    try { this.manager?.emit?.('sketch-picked', id); } catch {}
+    return hitGroup;
+  }
+
+  // 判断 child 是否为 root 的子孙（或本身）
+  private isDescendantOf(child: THREE.Object3D, root: THREE.Object3D | null): boolean {
+    if (!child || !root) return false;
+    let cur: THREE.Object3D | null = child;
+    while (cur) {
+      if (cur === root) return true;
+      cur = cur.parent;
+    }
+    return false;
   }
 
   // ---------------- 鼠标点击高亮 ----------------
