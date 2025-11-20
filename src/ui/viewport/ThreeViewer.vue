@@ -5,10 +5,10 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from 'vue';
 import * as THREE from 'three';
-import AppManager from '../../core/scene/SceneManager';
+import SceneManager from '../../core/scene/AppManager';
 
 const viewerContainer = ref<HTMLDivElement | null>(null);
-let app: AppManager | null = null;
+let app: SceneManager | null = null;
 let meshObj: THREE.Object3D | null = null;
 
 let canvasEl: HTMLCanvasElement | null = null;
@@ -32,7 +32,7 @@ function onPointerDownCapture(e: PointerEvent) {
 }
 
 onMounted(async () => {
-  app = AppManager.getInstance();
+  app = SceneManager.getInstance();
 
   // 把 renderer.domElement 放入指定容器
   if (viewerContainer.value && app) {
