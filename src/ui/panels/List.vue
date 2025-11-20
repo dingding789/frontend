@@ -24,10 +24,10 @@
         :key="item.id"
         class="p-2 border border-gray-700 rounded flex justify-between items-center hover:bg-gray-800 transition cursor-pointer"
         :class="{ 'bg-blue-800': selectedId !== null && Number(item.id) === selectedId }"
-        :style="{ backgroundColor: selectedId !== null && Number(item.id) === selectedId ? '#1e40af' : '' }"
-        @mousedown="toggle(item.id)"
+        
+        @click="handleSketchClick(item.id)"
         tabindex="0"
-        @keydown.enter.prevent="toggle(item.id)"
+        @keydown.enter.prevent="handleSketchClick(item.id)"
       >
         <div class="flex-1 text-gray-200 truncate">
           {{ item.name }}
@@ -49,10 +49,14 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import AppManager from '../../core/scene/SceneManager';
 
+
 const app = AppManager.getInstance();
 const sketch = app.sketchMgr;
 const selectedId = ref<number | null>(null);
 const list = sketch.sketchList;
+
+
+
 
 const norm = (id: any) => {
   const n = Number(id);
@@ -61,7 +65,7 @@ const norm = (id: any) => {
 
 // 监听 3D 侧事件同步列表高亮
 function onSketchPicked(id: number | string | null) {
-  selectedId.value = id == null ? null : norm(id);
+  selectedId.value = id == null ? null : Number(id);
 }
 
 onMounted(() => {
@@ -78,44 +82,74 @@ function refresh() {
 }
 
 // 列表点击：高亮/取消（与 3D 同步）
-async function toggle(id: number | string) {
-  const nId = norm(id);
-  if (nId == null) return;
-  const mgr = (sketch as any).highlightMgr || (app as any).highlightMgr;
-  if (!mgr) return;
+async function handleSketchClick(id: number | string) {
+  const numericId = norm(id); // 将 id 转为数字类型
+  if (numericId == null) return;
+  const highlightManager = (sketch as any).highlightMgr || (app as any).highlightMgr;
+  if (!highlightManager) return;
 
-  // 取消
-  if (selectedId.value === nId) {
+  // 取消高亮：再次点击已高亮项时
+  if (selectedId.value === numericId) {
     selectedId.value = null;
-    if (typeof mgr.clearHighlight === 'function') {
-      mgr.clearHighlight();
+    if (typeof highlightManager.clearHighlight === 'function') {
+      highlightManager.clearHighlight();
     } else {
-      mgr.highlight?.(null, false);
+      highlightManager.highlight?.(null, false);
       (sketch as any)?.emit?.('sketch-picked', null);
       app.renderOnce?.();
     }
     return;
+    
   }
 
-  // 新高亮
-  selectedId.value = nId;
+  // 新高亮：点击未高亮项时
+  selectedId.value = numericId;
   try {
-    if (typeof mgr.highlightBySketchId === 'function') {
-      await mgr.highlightBySketchId(nId); // 内部已 emit
+    if (typeof highlightManager.highlightBySketchId === 'function') {
+      await highlightManager.highlightBySketchId(numericId); // 内部已 emit
     } else {
-      const idx = sketch.sketchList.value.findIndex((it: any) => norm(it.id) === nId);
+      const idx = sketch.sketchList.value.findIndex((it: any) => norm(it.id) === numericId);
       if (idx >= 0 && sketch.allSketchItems && sketch.allSketchItems[idx]) {
-        mgr.highlight?.(sketch.allSketchItems[idx], true);
-        (sketch as any)?.emit?.('sketch-picked', nId);
+        highlightManager.highlight?.(sketch.allSketchItems[idx], true);
+        (sketch as any)?.emit?.('sketch-picked', numericId);
       }
     }
+    //console.log('草图信息',numericId)
     app.renderOnce?.();
   } catch (e) {
     console.error('高亮失败', e);
   }
 }
 
+// /**
+//  * 双击草图列表项，获取草图id，并通过 SketchEditManager 查找并获取平面信息
+//  */
+// async function handleSketchDblClick(id: number | string) {
+//   const numericId = norm(id);
+//   if (numericId == null) return;
+//   // 通过 SketchEditManager 获取平面信息
+//   const planeName = sketchEditManager.getPlaneNormalBySketchId(numericId);
+//   if (!planeName) {
+//     console.warn('未找到该草图的平面信息');
+//     return;
+//   }
+//   // 这里可以后续扩展：如切换界面、聚焦等
+//   console.log(`草图ID: ${numericId}, 平面: ${planeName}`);
+// }
+
 async function remove(id: number) {
   await sketch.sketchData.deleteSketchByID(id);
 }
+
+// 暴露全局方法，供 HighlightManager 直接调用
+(window as any).setListSelectedId = (id: number | string | null) => {
+  selectedId.value = id == null ? null : Number(id);
+};
 </script>
+
+<style scoped>
+/* 高亮选中项的背景色，和 tailwind 的 bg-blue-800 保持一致 */
+.bg-blue-800 {
+  background-color: #1e40af !important;
+}
+</style>
