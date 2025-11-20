@@ -2,7 +2,7 @@
 // 草图管理器，负责整个草图绘制流程的调度与管理，包括场景、数据、会话、平面操作等。
 import * as THREE from 'three';
 import { ref } from 'vue';
-import AppManager from '../../scene/SceneManager';
+import AppManager from '../../scene/AppManager';
 import { SketchItem } from '../../geometry/sketchs';
 import {
   SketchPlaneManager,
@@ -11,7 +11,6 @@ import {
   SketchSessionManager,
   HighlightManager
 } from './index';
-
 
 // ---------------- 工具 & 类型 ----------------
 export type SketchTool = 'point' | 'line' | 'arc' | 'rect' | 'circle' | 'spline'; // 草图工具类型，新增circle
@@ -43,6 +42,9 @@ export default class SketchManager {
   private previewItem: SketchItem | null = null; // 临时预览线段或对象
   private preSketchPos = new THREE.Vector3();    // 保存开始绘图前相机位置
   private preSketchUp = new THREE.Vector3();     // 保存开始绘图前相机上方向
+  private circleCreatorCtl?: AbortController; // 新增
+ 
+ 
 
   constructor(app: AppManager) {
     this.app = app;
@@ -54,7 +56,7 @@ export default class SketchManager {
     this.highlightMgr = new HighlightManager(app, this);
   }
 
-  // ---------------- 基本控制方法 ----------------
+
 
   /**
    * startSketch
@@ -79,19 +81,12 @@ export default class SketchManager {
     this.preSketchUp.copy(this.app.camera.up);
 
     // 禁用轨道控制器并显示绘图平面
-    //this.app.controls.enabled = false;
     this.planeMgr.createPlanes();
 
-    // 启用点击平面选择
     if (typeof this.planeMgr.enableClickSelect === 'function') {
       this.planeMgr.enableClickSelect();
     }
-
-    // 渲染一次，确保平面显示
     this.app.renderOnce();
-
-
-
 
 
   }
@@ -150,6 +145,51 @@ export default class SketchManager {
     this.allSketchItems.push([...this.sketchItems.value]);
     this.highlightMgr.setItems([...this.allSketchItems.flat()]);
 
+    // // === 新增：将封闭草图自动转为面（供后续拉伸使用） ===
+    // const planeNormal: THREE.Vector3 =
+    //   (((this.sketchSession.currentSketchPlane as any)?.normal) as THREE.Vector3) ?? new THREE.Vector3(0, 0, 1);
+    // const faces = buildFacesFromSketchItems(this.sketchItems.value, planeNormal);
+    // for (const f of faces) f.draw(this.app.scene);
+
+    // 解绑事件，清理预览
+    this.circleCreatorCtl?.abort();
+    this.circleCreatorCtl = undefined;
+
     this.app.renderOnce();
+
   }
+
+
+    private pickPoint(ev: MouseEvent): THREE.Vector3 {
+    const rect = this.app.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((ev.clientX - rect.left) / rect.width) * 2 - 1,
+      -((ev.clientY - rect.top) / rect.height) * 2 + 1
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, this.app.camera);
+
+    // 优先使用当前草图平面的法向，假设平面过原点或有 plane 对象
+    let plane: THREE.Plane; // 始终保证有值，避免 null
+    const cur = this.sketchSession.currentSketchPlane as any;
+    if (cur?.plane instanceof THREE.Plane) {
+      plane = cur.plane;
+    } else if (cur?.normal instanceof THREE.Vector3 && cur?.point instanceof THREE.Vector3) {
+      plane = new THREE.Plane().setFromNormalAndCoplanarPoint(cur.normal, cur.point);
+    } else if (cur?.normal instanceof THREE.Vector3) {
+      plane = new THREE.Plane().setFromNormalAndCoplanarPoint(cur.normal, new THREE.Vector3());
+    } else {
+      // 默认 XY 平面 z=0
+      plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    }
+
+    const hit = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(plane, hit)) {
+      return hit;
+    }
+    return new THREE.Vector3(); // 未命中返回原点
+  }
+  
 }
+
+

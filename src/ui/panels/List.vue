@@ -52,7 +52,7 @@
 
 <script lang="ts" setup>
 import { onMounted } from 'vue'
-import AppManager from '../../core/scene/SceneManager';
+import AppManager from '../../core/scene/AppManager';
 import SketchManager from '../../core/managers/sketchManager/SketchManager';
 import { ref } from 'vue'
 const app = AppManager.getInstance();

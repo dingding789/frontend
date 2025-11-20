@@ -3,7 +3,7 @@
 import { ExtrudeItem } from './ExtrudeItem';
 import * as THREE from 'three';
 import { CircleItem } from '../../geometry/sketchs/CircleItem';
-import AppManager from '../../scene/SceneManager';
+import AppManager from '../../scene/AppManager';
 
 export abstract class CircleExtrudeItem extends ExtrudeItem {
   p1: [number, number, number]; // 圆心

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import AppManager from '../../scene/SceneManager';
+import AppManager from '../../scene/AppManager';
 
 export class SketchPlaneManager {
   private app: AppManager;
