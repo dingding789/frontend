@@ -13,6 +13,7 @@ import { CreateArc } from '../../../create/sketch/CreateArc';
 import { CreateLine } from '../../../create/sketch/CreateLine';
 import { CreatePoint } from '../../../create/sketch/CreatePoint';
 import { CreateCircle } from '../../../create/sketch/CreateCircle';
+import { SketchPlaneManager } from '../../sketchManager';
 
 /**
  * 草图绘制点击事件
@@ -46,10 +47,10 @@ export class SketchClickEvent extends SketchMouseEventBase {
     if (!plane) return;
 
     session.currentSketchPlane = plane;
-    if (planeName) manager.planeMgr.highlightPlane?.(planeName);
     manager.planeMgr.removeAll();
     return;
   }
+  this.manager.sketch.planeNormal = session.currentSketchPlane.normal;
 
     // =====获取与平面交点 =====
     const intersect = this.getIntersectOnPlane(mouse, session.currentSketchPlane);
@@ -62,35 +63,34 @@ export class SketchClickEvent extends SketchMouseEventBase {
         break;
       case 'point': {
         // 使用 CreatePoint 命令处理单击创建点
-        let cmd = (session as any).pointCmd as CreatePoint | undefined;
-        if (!cmd) (session as any).pointCmd = cmd = new CreatePoint(app, manager);
+        let cmd = session.pointCmd;
+        if (!cmd) session.pointCmd = cmd = new CreatePoint(app, manager);
         cmd.onMove?.(intersect);
         cmd.onClick(intersect);
         if (cmd.isFinished?.()) {
           cmd.finish?.();
-          (session as any).pointCmd = null;
+          session.pointCmd = null;
         }
         break;
       }
       case 'line': {
         // 使用 CreateLine 命令，复用实例以支持两次点击完成
-        let cmd = (session as any).lineCmd as CreateLine | undefined;
-        if (!cmd) (session as any).lineCmd = cmd = new CreateLine(app, manager);
+        let cmd = session.lineCmd;
+        if (!cmd) session.lineCmd = cmd = new CreateLine(app, manager);
         cmd.onMove?.(intersect);
         cmd.onClick(intersect);
         if (cmd.isFinished?.()) {
           cmd.finish?.();
-          (session as any).lineCmd = null;
+          session.lineCmd = null;
         }
         break;
       }
       case 'arc': {    
         const mode = session.arcMode ?? 'threePoints';
-        let cmd = (session as any).arcCmd as CreateArc | undefined;
+        let cmd = session.arcCmd;
 
-        // 模式变更或未创建则重建，否则复用
-        if (!cmd || (cmd as any).mode !== mode) {
-          (session as any).arcCmd = cmd = new CreateArc(app, manager, mode);
+        if (!cmd) {
+          session.arcCmd = cmd = new CreateArc(app, manager, mode);
         }
 
         cmd.onMove?.(intersect);
@@ -98,7 +98,7 @@ export class SketchClickEvent extends SketchMouseEventBase {
 
         if (cmd.isFinished?.()) {
           cmd.finish?.();
-          (session as any).arcCmd = null;
+          session.arcCmd = null;
         }
         break;
       }
@@ -107,19 +107,19 @@ export class SketchClickEvent extends SketchMouseEventBase {
         const rawMode = session.circleMode ?? 'two-point'; // 与 CircleItem 当前实现一致
         const planeNormal: THREE.Vector3 =
           (session.currentSketchPlane?.normal as THREE.Vector3) ?? new THREE.Vector3(0, 0, 1);
-        let cmd = (session as any).circleCmd as CreateCircle | undefined;
+        let cmd = session.circleCmd as CreateCircle | undefined;
         if (
           !cmd ||
-          (cmd as any).mode !== rawMode ||
-          !(cmd as any).planeNormal?.equals?.(planeNormal)
+          cmd .mode !== rawMode ||
+          !cmd.planeNormal?.equals?.(planeNormal)
         ) {
-          (session as any).circleCmd = cmd = new CreateCircle(app, manager, rawMode, planeNormal);
+          session.circleCmd = cmd = new CreateCircle(app, manager, rawMode, planeNormal);
         }
         cmd.onMove?.(intersect);
         cmd.onClick(intersect);
         if (cmd.isFinished?.()) {
           cmd.finish?.();
-          (session as any).circleCmd = null;
+          session.circleCmd = null;
         }
         break;
       }
@@ -140,12 +140,11 @@ export class SketchClickEvent extends SketchMouseEventBase {
  * @param planeMgr 草图平面管理器
  * @returns { plane?: THREE.Plane, planeName?: SketchPlaneName }
  */
-export function pickSketchPlane(raycaster: THREE.Raycaster, planeMgr: any): { plane?: THREE.Plane; planeName?: SketchPlaneName } {
+export function pickSketchPlane(raycaster: THREE.Raycaster, planeMgr: SketchPlaneManager): { plane?: THREE.Plane; planeName?: SketchPlaneName } {
   let meshes: THREE.Object3D[] = [];
 
-  if (typeof planeMgr.getMeshes === 'function') {
-    meshes = planeMgr.getMeshes();
-  } else if (planeMgr.planes) {
+
+  if (planeMgr.planes) {
     meshes = planeMgr.planes.map((p: any) => p.mesh);
   }
 

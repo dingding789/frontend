@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import AppManager from '../../scene/AppManager';
+import AppManager from '../../AppManager';
 
 export class SketchPlaneManager {
   private app: AppManager;
-  private planes: { mesh: THREE.Mesh; name: string }[] = [];
+  public planes: { mesh: THREE.Mesh; name: string }[] = [];
   private selectedPlane: THREE.Mesh | null = null;
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
@@ -71,8 +71,8 @@ export class SketchPlaneManager {
   this.app.camera.up.normalize();
 
   // 如果存在 OrbitControls，同步 controls.target，并强制 update
-  const anyApp: any = this.app as any;
-  const controls = anyApp?.controls;
+
+  const controls = this.app.controls.instance;
   if (controls && typeof controls.target !== 'undefined') {
     // 把 controls.target 对齐到平面中心（world position）
     controls.target.copy(target);

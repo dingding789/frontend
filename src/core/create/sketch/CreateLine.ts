@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { CreateCommand } from '../CreateCommand';
 import { LineItem } from '../../geometry/sketchs/LineItem';
+import AppManager from '../../AppManager';
+import { SketchManager } from '../../managers/sketchManager';
 
 export class CreateLine extends CreateCommand {
-
+  lineCmd?: CreateLine | null;
   createItem(): LineItem | null {
     if (this.points.length < 2) return null;
     const [p0, p1] = this.points;
@@ -19,7 +21,7 @@ export class CreateLine extends CreateCommand {
       this.previewItem.drawPreview(this.app.scene, point);
     }
   }
-  constructor(app: any, manager: any) {
+  constructor(app: AppManager, manager: SketchManager) {
     super(app, manager);
     this.onClick = this.onClick.bind(this);
     this.onMove = this.onMove.bind(this);
@@ -59,7 +61,7 @@ export class CreateLine extends CreateCommand {
     const item = new LineItem(p0.clone(), p1.clone());
     item.draw(this.app.scene);
     // 记录到草图集合（与 LineItem.handleLineTool 保持一致）
-    this.manager.sketchItems?.value?.push(item);
+    this.manager.sketch.items.push(item);
 
     // 重置
     this.points.length = 0;

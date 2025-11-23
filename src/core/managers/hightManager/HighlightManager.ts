@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { SketchItem } from '../../geometry/sketchs';
+import { SketchStruct } from '../sketchManager/SketchManager';
+import { App } from 'vue';
+import AppManager from '../../AppManager';
 
 /**
  * HighlightManager 类用于管理草图项的高亮显示。
@@ -9,7 +12,7 @@ export class HighlightManager {
   private highlightedItem: SketchItem | SketchItem[] | null = null; // 当前高亮的草图项（可为单个或数组）
   private highlightColor = 0xffaa00; // 高亮颜色（橙色）
   private normalColor = 0x00ffff; // 正常颜色（青色）
-  private allItems: SketchItem[] = []; // 所有草图项的集合
+  private allItems: SketchStruct[] = []; // 所有草图项的集合
   private raycaster = new THREE.Raycaster(); // 用于射线检测的 Raycaster
   private mouse = new THREE.Vector2(); // 用于存储鼠标位置的 Vector2
 
@@ -19,7 +22,7 @@ export class HighlightManager {
    * @param app THREE 应用管理器
    * @param manager 草图管理器
    */
-  constructor(private app: any, private manager: any) {
+  constructor(private app: AppManager) {
     // 绑定鼠标点击事件到 onMouseClick 方法
     this.app.renderer.domElement.addEventListener('click', this.onMouseClick.bind(this));
   }
@@ -28,7 +31,7 @@ export class HighlightManager {
    * 设置所有草图项
    * @param items 草图项数组
    */
-  setItems(items: SketchItem[]) {
+  setItems(items: SketchStruct[]) {
     this.allItems = items; // 将传入的草图项数组赋值给 allItems 属性
   }
 
@@ -98,7 +101,7 @@ export class HighlightManager {
     // 设置新的高亮颜色（仅高亮当前一组）
     if (items && items.length > 0) {
       items.forEach((item) => {
-        const material = (item.object3D as any)?.material;
+        const material = (item.object3D as any).material;
         if (material?.color) material.color.setHex(this.highlightColor);
         if (material) material.needsUpdate = true;
       });
@@ -115,9 +118,9 @@ export class HighlightManager {
    * @param raycaster 射线检测器
    * @param sketchGroups 草图项二维数组（每组为一个草图）
    */
-  pick(raycaster: THREE.Raycaster, sketchGroups: SketchItem[][]) {
+  pick(raycaster: THREE.Raycaster, sketchGroups: SketchStruct[]) {
     // 获取所有草图项的 Object3D 根对象
-    const rootObjects = sketchGroups.flat().map(item => item.object3D).filter(Boolean) as THREE.Object3D[];
+    const rootObjects = sketchGroups.flatMap(item => item.items.map(subItem => subItem.object3D)).filter(Boolean) as THREE.Object3D[];
     // 进行射线检测
     const intersects = raycaster.intersectObjects(rootObjects, true);
 
@@ -134,11 +137,11 @@ export class HighlightManager {
     const hitObject = intersects[0].object;
 
     // 找到所属草图组，保存射线命中所属的草图项的数组，如果没有命中则为null
-    let hitGroup: SketchItem[] | null = null;
+    let hitGroup: SketchStruct | null = null;
     let groupIndex = -1;
     for (let i = 0; i < sketchGroups.length; i++) {
       const group = sketchGroups[i];
-      if (group && group.some(item => this.isDescendantOf(hitObject, item.object3D as THREE.Object3D))) {
+      if (group && group.items.some(item => this.isDescendantOf(hitObject, item.object3D as THREE.Object3D))) {
         hitGroup = group;
         groupIndex = i;
         break;
@@ -147,12 +150,12 @@ export class HighlightManager {
     if (!hitGroup) return null;
 
     // 与 sketchList 顺序对应获取 id，并转为数字类型
-    const sketchList = this.manager?.sketchList?.value || [];
+    const sketchList = this.app.sketchMgr?.sketchList?.value || [];
     const idRaw = sketchList[groupIndex]?.id ?? null;
     const sketchId = idRaw != null ? Number(idRaw) : null;
 
     // 命中草图：高亮并同步设置列表高亮
-    this.highlight(hitGroup, true);
+    this.highlight(hitGroup.items, true);
     if (typeof (window as any).setListSelectedId === 'function') {
       (window as any).setListSelectedId(sketchId);
     }
@@ -189,7 +192,7 @@ export class HighlightManager {
     // 根据鼠标位置设置射线检测器的方向
     this.raycaster.setFromCamera(this.mouse, this.app.camera);
     // 在所有草图（当前+历史）中查找被点击的元素
-    const allSketchGroups: SketchItem[][] = this.manager.allSketchItems;
+    const allSketchGroups: SketchStruct[] = this.app.sketchMgr.allSketch;
     // 使用 pick 方法检测射线相交并高亮
     this.pick(this.raycaster, allSketchGroups);
     this.app.renderOnce(); // 重新渲染场景以显示高亮

@@ -1,4 +1,4 @@
-export * from './HighlightManager';
+export * from '../hightManager/HighlightManager';
 export * from './SketchDataManager';
 export * from './SketchManager';
 export * from './SketchPlaneManager';

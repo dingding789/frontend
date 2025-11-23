@@ -1,15 +1,15 @@
 // AppManager.ts
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import SketchManager from '../managers/sketchManager/SketchManager'; // 导入 SketchManager
-import { ExtrudeManager } from '../managers/featureManager/ExtrudeManager'; // 导入 ExtrudeManager
-import { SceneLights } from './SceneLights';
-import { SceneCamera } from './SceneCamera';
-import { SceneRenderer } from './SceneRenderer';
-import { SceneControls } from './SceneControls';
-import { EventManager } from '../managers/eventManager/EventManager';
-import MainModuleFactory, { MainModule } from '../../wasm/chili-wasm';
-import { ensureWasm, getWasm } from '../../wasm/wasm';
+import { SketchManager } from './managers/sketchManager/SketchManager'; // 导入 SketchManager
+import { ExtrudeManager } from './managers/featureManager/ExtrudeManager'; // 导入 ExtrudeManager
+import { SceneLights } from './scene/SceneLights';
+import { SceneCamera } from './scene/SceneCamera';
+import { SceneRenderer } from './scene/SceneRenderer';
+import { SceneControls } from './scene/SceneControls';
+import { EventManager } from './managers/eventManager/EventManager';
+import MainModuleFactory, { MainModule } from '../wasm/chili-wasm';
+import { ensureWasm, getWasm } from '../wasm/wasm';
 
 interface AppManagerOptions {
   backgroundColor?: number;
@@ -34,6 +34,7 @@ class AppManager {
   public ambientLight!: THREE.AmbientLight;
   public directionalLight!: THREE.DirectionalLight;
   private wasmPromise: Promise<MainModule | null> | null = null;
+  public wasm?: MainModule;
   /** 是否启用阴影 */
   private enableShadows: boolean;
   public needsRender = true; // 新增：场景是否需要渲染一次
@@ -141,14 +142,13 @@ class AppManager {
       roughness: 0.7
     });
   }
-    private ensureWasm(): Promise<MainModule | null> {
-    const cached = (this as any).wasm as MainModule | undefined;
-    if (cached) return Promise.resolve(cached);
+  private ensureWasm(): Promise<MainModule | null> {
+    if (this.wasm) return Promise.resolve(this.wasm);
     if (this.wasmPromise) return this.wasmPromise;
 
     this.wasmPromise = MainModuleFactory()
       .then((mod: MainModule) => {
-        (this as any).wasm = mod;
+        this.wasm = mod;
         return mod;
       })
       .catch((e: any) => {
@@ -159,8 +159,8 @@ class AppManager {
 
     return this.wasmPromise;
   }
-
-
 }
+
+
 
 export default AppManager;

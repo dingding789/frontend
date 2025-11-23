@@ -47,13 +47,13 @@
 
 <script lang="ts" setup>
 import { ref, onMounted, onUnmounted } from 'vue';
-import AppManager from '../../core/scene/AppManager';
+import AppManager from '../../core/AppManager';
 
 
 const app = AppManager.getInstance();
-const sketch = app.sketchMgr;
+const sketchMgr = app.sketchMgr;
 const selectedId = ref<number | null>(null);
-const list = sketch.sketchList;
+const list = sketchMgr.sketchList;
 
 
 
@@ -69,23 +69,23 @@ function onSketchPicked(id: number | string | null) {
 }
 
 onMounted(() => {
-  sketch.sketchData.loadAll();
-  (sketch as any)?.on?.('sketch-picked', onSketchPicked);
+  sketchMgr.sketchData.loadAll();
+  (sketchMgr as any)?.on?.('sketch-picked', onSketchPicked);
 });
 
 onUnmounted(() => {
-  (sketch as any)?.off?.('sketch-picked', onSketchPicked);
+  (sketchMgr as any)?.off?.('sketch-picked', onSketchPicked);
 });
 
 function refresh() {
-  sketch.sketchData.loadAll();
+  sketchMgr.sketchData.loadAll();
 }
 
 // 列表点击：高亮/取消（与 3D 同步）
 async function handleSketchClick(id: number | string) {
   const numericId = norm(id); // 将 id 转为数字类型
   if (numericId == null) return;
-  const highlightManager = (sketch as any).highlightMgr || (app as any).highlightMgr;
+  const highlightManager = (sketchMgr as any).highlightMgr || (app as any).highlightMgr;
   if (!highlightManager) return;
 
   // 取消高亮：再次点击已高亮项时
@@ -95,7 +95,7 @@ async function handleSketchClick(id: number | string) {
       highlightManager.clearHighlight();
     } else {
       highlightManager.highlight?.(null, false);
-      (sketch as any)?.emit?.('sketch-picked', null);
+      (sketchMgr as any)?.emit?.('sketch-picked', null);
       app.renderOnce?.();
     }
     return;
@@ -108,10 +108,10 @@ async function handleSketchClick(id: number | string) {
     if (typeof highlightManager.highlightBySketchId === 'function') {
       await highlightManager.highlightBySketchId(numericId); // 内部已 emit
     } else {
-      const idx = sketch.sketchList.value.findIndex((it: any) => norm(it.id) === numericId);
-      if (idx >= 0 && sketch.allSketchItems && sketch.allSketchItems[idx]) {
-        highlightManager.highlight?.(sketch.allSketchItems[idx], true);
-        (sketch as any)?.emit?.('sketch-picked', numericId);
+      const idx = sketchMgr.sketchList.value.findIndex((it: any) => norm(it.id) === numericId);
+      if (idx >= 0 && sketchMgr.allSketch && sketchMgr.allSketch[idx]) {
+        highlightManager.highlight?.(sketchMgr.allSketch[idx], true);
+        (sketchMgr as any)?.emit?.('sketch-picked', numericId);
       }
     }
     //console.log('草图信息',numericId)
@@ -138,7 +138,7 @@ async function handleSketchClick(id: number | string) {
 // }
 
 async function remove(id: number) {
-  await sketch.sketchData.deleteSketchByID(id);
+  await sketchMgr.sketchData.deleteSketchByID(id);
 }
 
 // 暴露全局方法，供 HighlightManager 直接调用
