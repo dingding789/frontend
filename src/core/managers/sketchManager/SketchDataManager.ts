@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { SketchConstraintManager } from './SketchConstraintManager';
 import { getPlaneName } from '../../utils/sketchUtils';
+import { SketchManager, SketchStruct } from '../../managers/sketchManager';
 import { SketchItem, RectItem } from '../../geometry/sketchs';
 import {
   SketchUploadService,
@@ -9,6 +10,8 @@ import {
   SketchSyncService,
   SketchNameService
 } from '../../../domain/services';
+import { App } from 'vue';
+import AppManager from '../../AppManager';
 
 
 export class SketchDataManager {
@@ -21,14 +24,8 @@ export class SketchDataManager {
   private nameService: SketchNameService;
 
   constructor(
-    private app: { scene: THREE.Scene; renderOnce: () => void },
-    private manager: {
-      sketchItems: { value: SketchItem[] };
-      allSketchItems: SketchItem[][];
-      sketchList: { value: any[] };
-      sketchScene: { clearSketchObjectsFromScene: () => void };
-      sketchSession: { currentSketchPlane: THREE.Plane | null };
-    }
+    private app: AppManager,
+    private manager: SketchManager
   ) {
     this.nameService = new SketchNameService();
     this.uploadService = new SketchUploadService(this.app, this.manager, this.nameService);
@@ -51,10 +48,8 @@ export class SketchDataManager {
   exportJSON(): string {
     return this.importService.exportSketch(
       this.sketchName,
-      this.manager.sketchList.value,
-      this.manager.sketchItems.value,
+      this.manager.sketch,
       this.constraintManager.getConstraints(),
-      this.currentPlaneName ?? 'XY'
     );
   }
 
@@ -66,7 +61,7 @@ export class SketchDataManager {
 
   /** 加载所有草图 */
   async loadAll() {
-    console.log('草图列表', this.manager.allSketchItems);
+    console.log('草图列表', this.manager.allSketch);
     return await this.syncService.loadAll();
     
   }

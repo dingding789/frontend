@@ -2,13 +2,15 @@
 import * as THREE from 'three';
 import { CreateCommand } from '../CreateCommand';
 import { ArcItem } from '../../geometry/sketchs/ArcItem';
+import AppManager from '../../AppManager';
+import { SketchManager } from '../../managers/sketchManager';
 
 type ArcMode = 'threePoints' | 'centerStartEnd';
 
 export class CreateArc extends CreateCommand {
   constructor(
-    app: any,
-    manager: any,
+    app: AppManager,
+    manager: SketchManager,
     private mode: ArcMode //= 'threePoints'
   ) {
     super(app, manager);
@@ -46,6 +48,7 @@ export class CreateArc extends CreateCommand {
 
   updatePreview(cursor: THREE.Vector3) {
     if (!this.previewItem) return;
+    if (!(this.previewItem instanceof ArcItem)) return;
 
     const pts = [...this.points];
     if (pts.length === 1) {

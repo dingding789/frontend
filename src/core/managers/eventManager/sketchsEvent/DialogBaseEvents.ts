@@ -1,3 +1,5 @@
+import AppManager from '../../../AppManager';
+import { SketchManager, SketchSessionManager } from '../../sketchManager';
 import { MouseEventBase } from '../MouseEventBase';
 
 /**
@@ -44,7 +46,7 @@ export class DialogMouseDownEvent extends MouseEventBase {
   private nativeMoveHandler = (ev: MouseEvent) => this.handleNativeMove(ev);
   private nativeUpHandler = (ev: MouseEvent) => this.handleNativeUp(ev);
 
-  constructor(app: any, manager: any, session: any) {
+  constructor(app: AppManager, manager: SketchManager, session: SketchSessionManager) {
     super(app, manager, session);
   }
 
@@ -57,7 +59,7 @@ export class DialogMouseDownEvent extends MouseEventBase {
     // 兜底移除原生监听
     window.removeEventListener('mousemove', this.nativeMoveHandler);
     window.removeEventListener('mouseup', this.nativeUpHandler);
-    const renderer = (this.app as any)?.renderer;
+    const renderer = this.app?.renderer;
     if (renderer?.domElement) {
       renderer.domElement.removeEventListener('mousemove', this.nativeMoveHandler);
       renderer.domElement.removeEventListener('mouseup', this.nativeUpHandler);
@@ -82,7 +84,7 @@ export class DialogMouseDownEvent extends MouseEventBase {
     window.addEventListener('mousemove', this.nativeMoveHandler, { passive: false });
     window.addEventListener('mouseup', this.nativeUpHandler, { passive: true });
 
-    const renderer = (this.app as any)?.renderer;
+    const renderer = this.app?.renderer;
     if (renderer?.domElement) {
       renderer.domElement.addEventListener('mousemove', this.nativeMoveHandler, { passive: false });
       renderer.domElement.addEventListener('mouseup', this.nativeUpHandler, { passive: true });
@@ -103,7 +105,7 @@ export class DialogMouseDownEvent extends MouseEventBase {
     // 解绑原生监听
     window.removeEventListener('mousemove', this.nativeMoveHandler);
     window.removeEventListener('mouseup', this.nativeUpHandler);
-    const renderer = (this.app as any)?.renderer;
+    const renderer = this.app?.renderer;
     if (renderer?.domElement) {
       renderer.domElement.removeEventListener('mousemove', this.nativeMoveHandler);
       renderer.domElement.removeEventListener('mouseup', this.nativeUpHandler);
@@ -125,7 +127,7 @@ export class DialogMouseMoveEvent extends MouseEventBase {
 
   private onMove: EventListener = (e: Event) => this.handleMove(e as CustomEvent<DialogEventDetail>);
 
-  constructor(app: any, manager: any, session: any) {
+  constructor(app: AppManager, manager: SketchManager, session: SketchSessionManager) {
     super(app, manager, session);
   }
 
@@ -175,7 +177,7 @@ export class DialogMouseUpEvent extends MouseEventBase {
 
   private onUp: EventListener = (e: Event) => this.handleUp(e as CustomEvent<DialogEventDetail>);
 
-  constructor(app: any, manager: any, session: any) {
+  constructor(app: AppManager, manager: SketchManager, session: SketchSessionManager) {
     super(app, manager, session);
   }
 

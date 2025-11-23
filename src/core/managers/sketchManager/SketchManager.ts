@@ -2,7 +2,7 @@
 // 草图管理器，负责整个草图绘制流程的调度与管理，包括场景、数据、会话、平面操作等。
 import * as THREE from 'three';
 import { ref } from 'vue';
-import AppManager from '../../scene/AppManager';
+import AppManager from '../../AppManager';
 import { SketchItem } from '../../geometry/sketchs';
 import {
   SketchPlaneManager,
@@ -16,6 +16,23 @@ import {
 export type SketchTool = 'point' | 'line' | 'arc' | 'rect' | 'circle' | 'spline'; // 草图工具类型，新增circle
 export type SketchPlaneName = 'XY' | 'YZ' | 'XZ'; // 草图平面名称
 
+
+/** 草图结构体类型 */
+export interface SketchStruct {
+  id?: number;
+  frontend_id: string; // 前端生成的唯一 ID
+  name: string; // 草图名称
+  type: "sketch";
+  planeNormal: THREE.Vector3; // 草图平面法向
+  planeOrigin: THREE.Vector3; // 草图平面原点
+  items: SketchItem[]; // 草图包含的元素
+  createdAt: Date; // 创建时间
+  updatedAt?: Date; // 更新时间（可选）
+  constraints: any[]; // 草图约束列表
+
+}
+
+
 /**
  * SketchManager
  * 负责管理整个草图绘制流程，包括：
@@ -24,27 +41,27 @@ export type SketchPlaneName = 'XY' | 'YZ' | 'XZ'; // 草图平面名称
  * - 草图会话状态管理
  * - 平面操作与预览
  */
-export default class SketchManager {
+export class SketchManager {
   private app: AppManager; // 主应用管理器实例
 
   // ---------------- 各模块管理器 ----------------
   public sketchScene: SketchSceneManager;   // 管理 THREE.js 场景中的草图对象
   public sketchData: SketchDataManager;     // 管理草图数据上传和列表刷新
   public sketchSession: SketchSessionManager; // 管理绘图状态（是否绘制中、当前平面、当前工具）
-  private planeMgr: SketchPlaneManager;     // 管理绘图平面和点击选择逻辑
+  public planeMgr: SketchPlaneManager;     // 管理绘图平面和点击选择逻辑
   private highlightMgr: HighlightManager;   // 平面高亮管理
 
   // ---------------- 草图元素数据 ----------------
-  public allSketchItems: SketchItem[][] = []; // 所有历史草图元素（可用于撤销/重做等）
-  public sketchItems = ref<SketchItem[]>([]);    // 当前正在绘制的草图元素
+  public allSketch: SketchStruct[] = []; // 所有历史草图元素（可用于撤销/重做等）
+  public sketch: SketchStruct; // 当前正在绘制的草图数据结构
   public sketchList = ref<{ id: number; name: string }[]>([]); // 草图列表（id + 名称）
 
-  private previewItem: SketchItem | null = null; // 临时预览线段或对象
+  public previewItem: SketchItem | null = null; // 临时预览线段或对象
   private preSketchPos = new THREE.Vector3();    // 保存开始绘图前相机位置
   private preSketchUp = new THREE.Vector3();     // 保存开始绘图前相机上方向
   private circleCreatorCtl?: AbortController; // 新增
- 
- 
+
+
 
   constructor(app: AppManager) {
     this.app = app;
@@ -53,7 +70,7 @@ export default class SketchManager {
     this.sketchScene = new SketchSceneManager(app, this);
     this.sketchData = new SketchDataManager(app, this);
     this.sketchSession = new SketchSessionManager(app, this);
-    this.highlightMgr = new HighlightManager(app, this);
+    this.highlightMgr = new HighlightManager(app);
   }
 
 
@@ -69,11 +86,20 @@ export default class SketchManager {
    * - 渲染一次场景
    */
   startSketch() {
+    this.sketch = {
+      frontend_id: '',
+      type: "sketch",
+      name: '草图',
+      planeNormal: new THREE.Vector3(0, 0, 0),
+      planeOrigin: new THREE.Vector3(0, 0, 0),
+      items: [],
+      createdAt: new Date(),
+      constraints: [],
+    };
     this.sketchSession.isSketching.value = true;
-
     // 清空旧草图数据并从场景中移除
     //this.sketchItems.forEach(i => i.remove(this.app.scene));
-    this.sketchItems.value.length = 0;
+
     this.previewItem?.remove(this.app.scene);
 
     // 保存当前相机状态
@@ -106,13 +132,16 @@ export default class SketchManager {
    * @param save 是否保存草图数据
    */
   async finishSketch(save = true) {
+    this.sketch.frontend_id = `${Date.now()}`;
+    this.sketch.createdAt = new Date();
     // 1. 结束绘图状态
     this.sketchSession.isSketching.value = false;
 
-    // 2. 上传草图数据（如有需要）
-    if (save && this.sketchItems.value.length > 0) {
+    // 2. 上传草图数据
+    if (save && this.sketch.items.length > 0) {
       try {
-        await this.sketchData.upload();
+        let Response = await this.sketchData.upload();
+        this.sketch.id = Response.id;
       } catch (err: any) {
         console.error('上传草图失败:', err);
         // 直接弹出错误，便于你看到后端返回的具体提示
@@ -120,6 +149,8 @@ export default class SketchManager {
           window.alert?.(`上传草图失败: ${err?.message ?? err}`);
         }
       }
+
+      this.allSketch.push(this.sketch);
     }
 
     // 3. 删除预览线段或对象
@@ -142,54 +173,14 @@ export default class SketchManager {
     await this.sketchData.refreshSketchList();
 
     // 7. 先写入历史，再更新高亮，保证 ExtrudeManager 能在 allSketchItems 中拾取到最新草图
-    this.allSketchItems.push([...this.sketchItems.value]);
-    this.highlightMgr.setItems([...this.allSketchItems.flat()]);
 
-    // // === 新增：将封闭草图自动转为面（供后续拉伸使用） ===
-    // const planeNormal: THREE.Vector3 =
-    //   (((this.sketchSession.currentSketchPlane as any)?.normal) as THREE.Vector3) ?? new THREE.Vector3(0, 0, 1);
-    // const faces = buildFacesFromSketchItems(this.sketchItems.value, planeNormal);
-    // for (const f of faces) f.draw(this.app.scene);
-
-    // 解绑事件，清理预览
-    this.circleCreatorCtl?.abort();
-    this.circleCreatorCtl = undefined;
+    this.highlightMgr.setItems(this.allSketch);
+    console.log('finishSketch', this.allSketch);
 
     this.app.renderOnce();
 
   }
 
-
-    private pickPoint(ev: MouseEvent): THREE.Vector3 {
-    const rect = this.app.renderer.domElement.getBoundingClientRect();
-    const ndc = new THREE.Vector2(
-      ((ev.clientX - rect.left) / rect.width) * 2 - 1,
-      -((ev.clientY - rect.top) / rect.height) * 2 + 1
-    );
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(ndc, this.app.camera);
-
-    // 优先使用当前草图平面的法向，假设平面过原点或有 plane 对象
-    let plane: THREE.Plane; // 始终保证有值，避免 null
-    const cur = this.sketchSession.currentSketchPlane as any;
-    if (cur?.plane instanceof THREE.Plane) {
-      plane = cur.plane;
-    } else if (cur?.normal instanceof THREE.Vector3 && cur?.point instanceof THREE.Vector3) {
-      plane = new THREE.Plane().setFromNormalAndCoplanarPoint(cur.normal, cur.point);
-    } else if (cur?.normal instanceof THREE.Vector3) {
-      plane = new THREE.Plane().setFromNormalAndCoplanarPoint(cur.normal, new THREE.Vector3());
-    } else {
-      // 默认 XY 平面 z=0
-      plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-    }
-
-    const hit = new THREE.Vector3();
-    if (raycaster.ray.intersectPlane(plane, hit)) {
-      return hit;
-    }
-    return new THREE.Vector3(); // 未命中返回原点
-  }
-  
 }
 
 

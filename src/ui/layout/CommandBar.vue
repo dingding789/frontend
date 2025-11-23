@@ -63,7 +63,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref, reactive } from 'vue';
-import AppManager from '../../core/scene/AppManager';
+import AppManager from '../../core/AppManager';
 import RectModeDialog from '../dialogs/RectModeDialog.vue';
 import CircleDialog from '../dialogs/CircleDialog.vue';
 import ExtrudeDialog from '../dialogs/ExtrudeDialog.vue';

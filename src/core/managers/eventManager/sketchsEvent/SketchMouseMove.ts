@@ -64,7 +64,7 @@ export class SketchMouseDown extends SketchMouseEventBase {
     session.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     session.raycaster.setFromCamera(session.mouse, app.camera);
 
-    const items = (manager.sketchItems.value || []) as any[];
+    const items = (manager.sketch.items || []) as any[];
     const handles: THREE.Object3D[] = [];
     for (const it of items) {
       if (it instanceof SplineCurveItem) handles.push(...it.getHandleObjects());

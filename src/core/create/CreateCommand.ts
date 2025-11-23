@@ -1,21 +1,18 @@
 // CreateCommand.ts
 import * as THREE from 'three';
+import { SketchManager } from '../managers/sketchManager';
+import AppManager from '../AppManager';
+import { ArcItem, CircleItem, LineItem, PointItem, RectItem, SplineCurveItem } from '../geometry/sketchs';
 
-export interface AppContext {
-  scene: THREE.Scene;
-}
 
-export interface SketchManager {
-  previewItem: any | null;
-  sketchItems: { value: any[] };
-}
+
 
 export abstract class CreateCommand {
   protected points: THREE.Vector3[] = [];
-  protected previewItem: any = null;
+  protected previewItem: LineItem | CircleItem | ArcItem | PointItem | RectItem | SplineCurveItem | null = null;
 
   constructor(
-    protected app: AppContext,
+    protected app: AppManager,
     protected manager: SketchManager
   ) {}
 
@@ -29,7 +26,7 @@ export abstract class CreateCommand {
   abstract isFinished(): boolean;
 
   /** 创建图元对象（最终实体） */
-  abstract createItem(): any;
+  abstract createItem(): LineItem | CircleItem | ArcItem | PointItem | RectItem | SplineCurveItem | null;
 
   /** 绘制预览图元 */
   abstract updatePreview(point: THREE.Vector3): void;
@@ -49,7 +46,8 @@ export abstract class CreateCommand {
     const item = this.createItem();
     if (item) {
       item.draw(this.app.scene);
-      this.manager.sketchItems.value.push(item);
+      this.manager.sketch.items.push(item);
+
     }
     this.reset();
   }

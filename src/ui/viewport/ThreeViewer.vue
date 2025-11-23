@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from 'vue';
 import * as THREE from 'three';
-import SceneManager from '../../core/scene/AppManager';
+import SceneManager from '../../core/AppManager';
 
 const viewerContainer = ref<HTMLDivElement | null>(null);
 let app: SceneManager | null = null;

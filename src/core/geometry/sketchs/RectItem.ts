@@ -12,7 +12,6 @@ export class RectItem extends SketchItem {
   public start?: THREE.Vector3;
   public end?: THREE.Vector3;     // 两点对角 / 三点中心线终点
   public p3?: THREE.Vector3;      // 三点宽度点
-  public planeNormal?: THREE.Vector3;
   public corners: [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3] | null = null;
 
   // 交互阶段：
@@ -342,7 +341,7 @@ export class RectItem extends SketchItem {
 
 function pushSketchItem(manager: any, item: any) {
   try {
-    if (manager?.sketchItems?.value?.push) manager.sketchItems.value.push(item);
-    else manager?.sketchItems?.push?.(item);
+    if (manager.sketch.items.push) manager.sketch.items.push(item);
+    else manager.sketch.items.push(item);
   } catch {}
 }

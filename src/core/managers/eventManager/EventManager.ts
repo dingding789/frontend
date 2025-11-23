@@ -7,6 +7,7 @@ import { WindowEvent } from './WindowEvent';
 import { ExtrudePicker } from './featuresEvent/ExtrudeEvents';
 // 对话框拖拽事件
 import { DialogMouseDownEvent, DialogMouseMoveEvent, DialogMouseUpEvent } from './sketchsEvent/DialogBaseEvents';
+import AppManager from '../../AppManager';
 
 /**
  * LazyEvent：延迟实例化包装器
@@ -32,7 +33,7 @@ class LazyEvent {
 }
 
 export class EventManager {
-  private app: any;
+  private app: AppManager;
   private session: any;
   private manager: any;
 
@@ -40,7 +41,7 @@ export class EventManager {
   // 保持类型为基类以兼容所有事件实现
   private events: Map<string, MouseEventBase | KeyboardEventBase | { bind(): void; unbind(): void }> = new Map();
 
-  constructor(app: any, manager: any, session: any) {
+  constructor(app: AppManager, manager: any, session: any) {
     this.app = app;
     this.manager = manager;
     this.session = session;

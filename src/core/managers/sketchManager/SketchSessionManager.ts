@@ -1,31 +1,37 @@
 import * as THREE from 'three';
-import { SketchTool } from './SketchManager';
-import { ref } from 'vue';
+import { SketchManager, SketchTool } from './SketchManager';
+import { App, ref } from 'vue';
 import { RectItem } from '../../geometry/sketchs/RectItem';
 import { EventManager } from '../eventManager/EventManager';
-
+import AppManager from '../../AppManager';
+import { CreateLine, CreateCircle, CreateArc, CreatePoint } from '../../create/sketch';
 export class SketchSessionManager {
   public isSketching = ref(false);
   public mouse = new THREE.Vector2();
   public raycaster = new THREE.Raycaster();
   public currentSketchPlane: THREE.Plane | null = null;
   public currentTool: SketchTool | null = null;
-
+  public suppressNextClick = false;
   // UI：'two-point' | 'three-point'
   public rectMode: 'two-point' | 'three-point' = 'two-point';
   public circleMode: 'two-point' | 'three-point' = 'two-point';
   public arcMode: 'threePoints' | 'centerStartEnd' = 'threePoints';
   public SpineCurveMode: 'passPoint' | 'dependencePoint' = 'passPoint';
 
+  public lineCmd?: CreateLine | null;
+  public circleCmd?: CreateCircle | null;
+  public arcCmd?: CreateArc | null;
+  public pointCmd?: CreatePoint | null;
+
   private canvas: HTMLElement | Window;
 
-  constructor(private app: any, private manager: any) {
+  constructor(private app: AppManager, private manager: SketchManager) {
     // 确保 previewItem 字段存在（与样条保持一致）
     if (this.manager && typeof this.manager === 'object' && !('previewItem' in this.manager)) {
-      (this.manager as any).previewItem = null;
+      (this.manager as SketchManager).previewItem = null;
     }
 
-    this.canvas = (this.app as any)?.renderer?.domElement ?? window;
+    this.canvas = (this.app as AppManager).renderer.domElement ?? window;
 
     // 绑定到原始 EventManager（优先），并回退原生事件
     const EM: any = (EventManager as any)?.getInstance?.() ?? EventManager;
@@ -74,7 +80,7 @@ export class SketchSessionManager {
   }
 
   private rayToPlane(clientX: number, clientY: number): THREE.Vector3 | null {
-    const canvas = (this.app as any)?.renderer?.domElement as HTMLElement | undefined;
+    const canvas = (this.app as AppManager)?.renderer?.domElement as HTMLElement | undefined;
     const rect = canvas?.getBoundingClientRect();
     const nx = rect ? ((clientX - rect.left) / rect.width) * 2 - 1 : (clientX / window.innerWidth) * 2 - 1;
     const ny = rect ? -((clientY - rect.top) / rect.height) * 2 + 1 : -(clientY / window.innerHeight) * 2 + 1;
@@ -86,7 +92,7 @@ export class SketchSessionManager {
   }
 
   private toolIsRect(): boolean {
-    return this.currentTool === 'rect' || this.manager?.currentTool === 'rect' || this.manager?.sketchSession?.currentTool === 'rect';
+    return this.currentTool === 'rect';
   }
 
   // EventManager/native -> 预览
