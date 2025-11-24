@@ -332,7 +332,7 @@ export class SplineCurveItem extends SketchItem {
       if (previewSpline.points.length >= 2) {
         previewSpline.remove(app.scene);
         previewSpline.draw(app.scene);                   // 落地为实线
-        manager.sketchItems.value.push(previewSpline);   // 保存
+        manager.sketch.items.push(previewSpline);   // 保存
       } else {
         previewSpline.remove(app.scene);                 // 不足 2 点，丢弃
       }

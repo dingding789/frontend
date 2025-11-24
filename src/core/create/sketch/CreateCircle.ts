@@ -2,16 +2,17 @@
 import * as THREE from 'three';
 import { CreateCommand } from '../CreateCommand';
 import { CircleItem, CircleMode, calcCircleBy3PointsOnPlane } from '../../geometry/sketchs/CircleItem';
-
-type WasmAny = any; // 根据你的项目替换为更精确的类型
+import AppManager from '../../AppManager';
+import { SketchManager } from '../../managers/sketchManager';
+import { MainModule, TopoDS_Face, TopoDS_Wire } from '../../../wasm/chili-wasm';
 
 export class CreateCircle extends CreateCommand {
-  private mode: CircleMode;
-  private planeNormal: THREE.Vector3;
+  public mode: CircleMode;
+  public planeNormal: THREE.Vector3;
 
   constructor(
-    app: any,
-    manager: any,
+    app: AppManager,
+    manager: SketchManager,
     mode: CircleMode = 'two-point',
     planeNormal: THREE.Vector3 = new THREE.Vector3(0, 0, 1)
   ) {
@@ -112,14 +113,7 @@ export class CreateCircle extends CreateCommand {
   
 
   private createTwoPointCircle(center : THREE.Vector3 , normal : THREE.Vector3 , radius : number): void {
-    
-
-
-    const wasm = (this.app as any)?.wasm as WasmAny;
-
-
-
-
+    const wasm = (this.app as AppManager)?.wasm as MainModule;
     // 调用 wasm 构造圆形（center, normal, radius）
     let rCircle;
     try {
@@ -137,7 +131,7 @@ export class CreateCircle extends CreateCommand {
     const shapeType = this.safeGetShapeType(shape, wasm);
     const TopAbs = wasm.TopAbs_ShapeEnum;
 
-    let topoWire: any | null = null;
+    let topoWire: TopoDS_Wire | null = null;
     try {
       if (shapeType === TopAbs.TopAbs_EDGE.value) {
         const edge = wasm.TopoDS.edge(shape);
@@ -147,7 +141,7 @@ export class CreateCircle extends CreateCommand {
       } else if (shapeType === TopAbs.TopAbs_WIRE.value) {
         topoWire = wasm.TopoDS.wire(shape);
       } else {
-        console.warn('circle 返回的 shape 既不是 EDGE 也不是 WIRE，type =', shapeType);
+        console.warn('circle 返回的 shape 既不是 EDGE 也不是 WIRE, type =', shapeType);
       }
     } catch (e) {
       console.warn('构造 wire 失败:', e);
@@ -155,7 +149,7 @@ export class CreateCircle extends CreateCommand {
     }
 
     // 尝试用 wire 生成 face（优先渲染面）
-    let face: any | null = null;
+    let face: TopoDS_Face | null = null;
     if (topoWire) {
       try {
         face = wasm.Wire.makeFace(topoWire);
@@ -176,7 +170,7 @@ export class CreateCircle extends CreateCommand {
 
  
 
-  private safeGetShapeType(shape: any, wasm: WasmAny): number | undefined {
+  private safeGetShapeType(shape: any, wasm: MainModule): number | undefined {
     try {
       return shape?.shapeType?.().value;
     } catch {
@@ -189,9 +183,9 @@ export class CreateCircle extends CreateCommand {
     }
   }
 
-  private renderCircleFromWasm(shape: any, topoWire: any, face: any, circleCenter: THREE.Vector3) {
+  private renderCircleFromWasm(shape: any, topoWire: TopoDS_Wire | null, face: TopoDS_Face | null, circleCenter: THREE.Vector3) {
     const scene: THREE.Scene = this.app.scene;
-    const wasm = (this.app as any).wasm as WasmAny;
+    const wasm = (this.app as AppManager).wasm as MainModule;
 
     // 若有面，优先尝试 mesher -> THREE.Mesh
     if (face) {
@@ -199,8 +193,8 @@ export class CreateCircle extends CreateCommand {
         const mesher = new wasm.Mesher(face, 0.5);
         const meshData = mesher.mesh();
 
-        const posArr = meshData.faceMeshData?.position ?? meshData.position;
-        const idxArr = meshData.faceMeshData?.index ?? meshData.index;
+        const posArr = meshData.faceMeshData.position;
+        const idxArr = meshData.faceMeshData.index;
 
         if (posArr && idxArr) {
           const geom = new THREE.BufferGeometry();
@@ -277,18 +271,18 @@ export class CreateCircle extends CreateCommand {
  *  - 如果 Mesher 生成的是局部原点圆（center 接近 0，法向≈+Z） -> 将其基变换为期望 planeNormal 并平移到 circleCenter
  */
 function finalizeCircleGeometryPosition(
-  g: THREE.BufferGeometry,
+  geometry: THREE.BufferGeometry,
   planeNormal: THREE.Vector3,
   circleCenter: THREE.Vector3
 ) {
-  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const pos = geometry.getAttribute('position') as THREE.BufferAttribute;
   if (!pos || pos.count < 3) return;
 
   // 取前三个顶点估算法向
-  const vA = new THREE.Vector3(pos.getX(0), pos.getY(0), pos.getZ(0));
-  const vB = new THREE.Vector3(pos.getX(1), pos.getY(1), pos.getZ(1));
-  const vC = new THREE.Vector3(pos.getX(2), pos.getY(2), pos.getZ(2));
-  let estNormal = vB.clone().sub(vA).cross(vC.clone().sub(vA)).normalize();
+  const vectorA = new THREE.Vector3(pos.getX(0), pos.getY(0), pos.getZ(0));
+  const vectorB = new THREE.Vector3(pos.getX(1), pos.getY(1), pos.getZ(1));
+  const vectorC = new THREE.Vector3(pos.getX(2), pos.getY(2), pos.getZ(2));
+  let estNormal = vectorB.clone().sub(vectorA).cross(vectorC.clone().sub(vectorA)).normalize();
 
   // 估算几何中心（使用所有点）
   const center = new THREE.Vector3();
@@ -306,7 +300,7 @@ function finalizeCircleGeometryPosition(
 
   // 若法向朝向与期望相反，翻转索引（改变面顺序）
   if (estNormal.dot(desired) < 0) {
-    const index = g.getIndex();
+    const index = geometry.getIndex();
     if (index) {
       const arr = index.array as Uint32Array | Uint16Array;
       for (let i = 0; i + 2 < arr.length; i += 3) {
@@ -315,7 +309,7 @@ function finalizeCircleGeometryPosition(
         arr[i + 2] = t;
       }
       index.needsUpdate = true;
-      g.computeVertexNormals();
+      geometry.computeVertexNormals();
       estNormal = estNormal.clone().multiplyScalar(-1);
     }
   }
@@ -328,8 +322,8 @@ function finalizeCircleGeometryPosition(
     const v = new THREE.Vector3().crossVectors(n, u).normalize();
     const basis = new THREE.Matrix4().makeBasis(u, v, n);
     basis.setPosition(circleCenter);
-    g.applyMatrix4(basis);
-    g.computeVertexNormals();
+    geometry.applyMatrix4(basis);
+    geometry.computeVertexNormals();
     return;
   } else {
     // 已在世界坐标，做最小旋转/平移对齐
@@ -337,10 +331,10 @@ function finalizeCircleGeometryPosition(
     if (angle > 1e-6) {
       const q = new THREE.Quaternion().setFromUnitVectors(estNormal, desired);
       const rotM = new THREE.Matrix4().makeRotationFromQuaternion(q);
-      g.applyMatrix4(rotM);
+      geometry.applyMatrix4(rotM);
     }
     // 平移中心对齐
-    const afterPos = g.getAttribute('position') as THREE.BufferAttribute;
+    const afterPos = geometry.getAttribute('position') as THREE.BufferAttribute;
     const newCenter = new THREE.Vector3();
     for (let i = 0; i < afterPos.count; i++) {
       newCenter.x += afterPos.getX(i);
@@ -350,8 +344,8 @@ function finalizeCircleGeometryPosition(
     newCenter.multiplyScalar(1 / afterPos.count);
     const delta = circleCenter.clone().sub(newCenter);
     if (delta.length() > 1e-6) {
-      g.applyMatrix4(new THREE.Matrix4().makeTranslation(delta.x, delta.y, delta.z));
+      geometry.applyMatrix4(new THREE.Matrix4().makeTranslation(delta.x, delta.y, delta.z));
     }
-    g.computeVertexNormals();
+    geometry.computeVertexNormals();
   }
 }

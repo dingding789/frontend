@@ -52,9 +52,9 @@ import AppManager from '../../core/AppManager';
 
 const app = AppManager.getInstance();
 const sketchMgr = app.sketchMgr;
-
 const selectedId = ref<number | null>(null);
 const list = sketchMgr.sketchList;
+
 
 
 
@@ -69,44 +69,46 @@ function onSketchPicked(id: number | string | null) {
 }
 
 onMounted(() => {
-   sketchMgr.sketchData.loadAll();
+  sketchMgr.sketchData.loadAll();
   (sketchMgr as any)?.on?.('sketch-picked', onSketchPicked);
 });
 
 onUnmounted(() => {
-    (sketchMgr as any)?.off?.('sketch-picked', onSketchPicked);
+  (sketchMgr as any)?.off?.('sketch-picked', onSketchPicked);
 });
 
 function refresh() {
-    sketchMgr.sketchData.loadAll();
+  sketchMgr.sketchData.loadAll();
 }
 
 // 列表点击：高亮/取消（与 3D 同步）
 async function handleSketchClick(id: number | string) {
-  const numericId = norm(id);
+  const numericId = norm(id); // 将 id 转为数字类型
   if (numericId == null) return;
-    const highlightManager = (sketchMgr as any).highlightMgr || (app as any).highlightMgr;
+  const highlightManager = (sketchMgr as any).highlightMgr || (app as any).highlightMgr;
   if (!highlightManager) return;
 
+  // 取消高亮：再次点击已高亮项时
   if (selectedId.value === numericId) {
     selectedId.value = null;
     if (typeof highlightManager.clearHighlight === 'function') {
       highlightManager.clearHighlight();
     } else {
       highlightManager.highlight?.(null, false);
-            (sketchMgr as any)?.emit?.('sketch-picked', null);
+      (sketchMgr as any)?.emit?.('sketch-picked', null);
       app.renderOnce?.();
     }
     return;
+    
   }
 
   // 新高亮：点击未高亮项时
   selectedId.value = numericId;
   try {
     if (typeof highlightManager.highlightBySketchId === 'function') {
-      await highlightManager.highlightBySketchId(numericId);
+      await highlightManager.highlightBySketchId(numericId); // 内部已 emit
     } else {
-            const idx = sketchMgr.sketchList.value.findIndex((it: any) => norm(it.id) === numericId);
+      const idx = sketchMgr.sketchList.value.findIndex((it: any) => norm(it.id) === numericId);
       if (idx >= 0 && sketchMgr.allSketch && sketchMgr.allSketch[idx]) {
         highlightManager.highlight?.(sketchMgr.allSketch[idx], true);
         (sketchMgr as any)?.emit?.('sketch-picked', numericId);
@@ -119,13 +121,24 @@ async function handleSketchClick(id: number | string) {
   }
 }
 
-/**
- * 双击：获取平面法向量 (planeNormal) 与可选平面方向
- * 与 SketchEditManager 中 getPlaneNormalBySketchId / getPlaneDirectionBySketchId 配对
- */
+// /**
+//  * 双击草图列表项，获取草图id，并通过 SketchEditManager 查找并获取平面信息
+//  */
+// async function handleSketchDblClick(id: number | string) {
+//   const numericId = norm(id);
+//   if (numericId == null) return;
+//   // 通过 SketchEditManager 获取平面信息
+//   const planeName = sketchEditManager.getPlaneNormalBySketchId(numericId);
+//   if (!planeName) {
+//     console.warn('未找到该草图的平面信息');
+//     return;
+//   }
+//   // 这里可以后续扩展：如切换界面、聚焦等
+//   console.log(`草图ID: ${numericId}, 平面: ${planeName}`);
+// }
 
 async function remove(id: number) {
-    await sketchMgr.sketchData.deleteSketchByID(id);
+  await sketchMgr.sketchData.deleteSketchByID(id);
 }
 
 // 暴露全局方法，供 HighlightManager 直接调用

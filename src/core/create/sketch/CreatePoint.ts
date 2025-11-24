@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { CreateCommand } from '../CreateCommand';
 import { PointItem } from '../../geometry/sketchs/PointItem';
+import AppManager from '../../AppManager';
+import { SketchManager } from '../../managers/sketchManager';
 
 export class CreatePoint extends CreateCommand {
     createItem() {
@@ -8,7 +10,7 @@ export class CreatePoint extends CreateCommand {
         return new PointItem(this.points[0].clone());
     }
 
-    constructor(app: any, manager: any) {
+    constructor(app: AppManager, manager: SketchManager) {
         super(app, manager);
         this.onClick = this.onClick.bind(this);
         this.onMove = this.onMove.bind(this);
@@ -54,7 +56,7 @@ export class CreatePoint extends CreateCommand {
         // 落地点
         const item = new PointItem(p.clone());
         item.draw(this.app.scene);
-        this.manager.sketchItems?.value?.push(item);
+        this.manager.sketch.items.push(item);
 
         // 重置
         this.points.length = 0;
