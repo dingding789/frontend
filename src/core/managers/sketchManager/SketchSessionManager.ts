@@ -103,7 +103,7 @@ export class SketchSessionManager {
     const hit = this.rayToPlane(xy.x, xy.y);
     if (!hit) return;
 
-    const preview = (this.manager as any)?.previewItem;
+    const preview = (this.manager  )?.previewItem;
     if (preview && typeof preview.drawPreview === 'function') {
       preview.drawPreview(this.app.scene, hit.clone());
       this.app.renderOnce?.();

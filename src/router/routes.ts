@@ -11,6 +11,7 @@ export const routes = {
   },
   sketch: {
     save: `${API_BASE}/sketch/save`,
+    edit: `${API_BASE}/sketch/edit`,
     list: `${API_BASE}/sketch/list`,
     load: (id: number | string) => `${API_BASE}/sketch/load?id=${id}`,
     delete: (id: number | string) => `${API_BASE}/sketch/delete?id=${id}`,

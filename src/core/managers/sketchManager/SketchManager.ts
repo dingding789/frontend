@@ -42,7 +42,7 @@ export interface SketchStruct {
  * - 平面操作与预览
  */
 export class SketchManager {
-  private app: AppManager; // 主应用管理器实例
+  public app: AppManager; // 主应用管理器实例
 
   // ---------------- 各模块管理器 ----------------
   public sketchScene: SketchSceneManager;   // 管理 THREE.js 场景中的草图对象
@@ -59,7 +59,7 @@ export class SketchManager {
   public previewItem: SketchItem | null = null; // 临时预览线段或对象
   private preSketchPos = new THREE.Vector3();    // 保存开始绘图前相机位置
   private preSketchUp = new THREE.Vector3();     // 保存开始绘图前相机上方向
-  private circleCreatorCtl?: AbortController; // 新增
+
 
 
 
@@ -97,9 +97,7 @@ export class SketchManager {
       constraints: [],
     };
     this.sketchSession.isSketching.value = true;
-    // 清空旧草图数据并从场景中移除
-    //this.sketchItems.forEach(i => i.remove(this.app.scene));
-
+    
     this.previewItem?.remove(this.app.scene);
 
     // 保存当前相机状态
@@ -120,67 +118,79 @@ export class SketchManager {
   /**
    * finishSketch
    * 完成草图绘制：
+   * - 判断是编辑模式还是新建模式
+   * - 编辑模式：保存到双击点击的草图ID
+   * - 新建模式：创建新草图
    * - 设置绘图状态为 inactive
    * - 上传草图数据（可选）
    * - 删除预览对象
    * - 移除草图平面
    * - 恢复相机位置和方向
    * - 恢复轨道控制器
-   * - 刷新草图列表
+   * - 刷新草图列表（仅新建时）
    * - 渲染场景
    *
    * @param save 是否保存草图数据
    */
   async finishSketch(save = true) {
-    this.sketch.frontend_id = `${Date.now()}`;
-    this.sketch.createdAt = new Date();
-    // 1. 结束绘图状态
-    this.sketchSession.isSketching.value = false;
-
-    // 2. 上传草图数据
-    if (save && this.sketch.items.length > 0) {
-      try {
-        let Response = await this.sketchData.upload();
-        this.sketch.id = Response.id;
-      } catch (err: any) {
-        console.error('上传草图失败:', err);
-        // 直接弹出错误，便于你看到后端返回的具体提示
-        if (typeof window !== 'undefined') {
-          window.alert?.(`上传草图失败: ${err?.message ?? err}`);
-        }
+    // 优先检查编辑管理器是否处于编辑模式
+    const sketchEditManager = (this as any).sketchEditManager;
+    const isEditingFromManager = sketchEditManager && 
+      typeof sketchEditManager.getIsEditingMode === 'function' &&
+      sketchEditManager.getIsEditingMode();
+    
+    // 判断是编辑模式还是新建模式
+    const isEditingMode = isEditingFromManager || (this.sketch && this.sketch.id != null);
+    
+    if (isEditingMode) {
+      // 编辑模式：使用编辑管理器保存到对应的草图ID
+      if (sketchEditManager && typeof sketchEditManager.finishAndSaveEditSession === 'function') {
+        //console.log('检测到编辑模式，使用编辑管理器保存');
+        await sketchEditManager.finishAndSaveEditSession();
+        return;
+      } else {
+        //console.warn('编辑模式下未找到sketchEditManager,使用默认保存逻辑');
       }
-
-      this.allSketch.push(this.sketch);
     }
 
-    // 3. 删除预览线段或对象
+    // 新建模式：原有的逻辑
+    this.sketch.frontend_id = `${Date.now()}`;
+    this.sketch.createdAt = new Date();
+    const hasItems = Array.isArray(this.sketch.items) && this.sketch.items.length > 0;
+
+    if (save && hasItems) {
+      try {
+        // 传递名称以便上传服务做去重，并在成功后回填 id
+        this.sketchData.sketchName = this.sketch.name || '草图';
+        await this.sketchData.upload();
+      } catch (err) {
+        console.error('新建草图上传失败:', err);
+      }
+    } else if (save && !hasItems) {
+      // 避免空草图被上传
+      //console.log('未绘制任何元素，跳过草图上传');
+    }
+
+    // 结束绘图状态
+    this.sketchSession.isSketching.value = false;
+
+    // 删除预览对象
     this.previewItem?.remove(this.app.scene);
     this.previewItem = null;
 
-    // 4. 移除绘图平面
+    // 移除绘图平面
     this.planeMgr.removeAll();
     this.sketchSession.currentSketchPlane = null;
 
-    // 5. 恢复相机位置和方向
+    // 恢复相机位置和方向
     this.app.camera.position.copy(this.preSketchPos);
     this.app.camera.up.copy(this.preSketchUp);
     this.app.camera.lookAt(0, 0, 0);
     this.app.controls.instance.enabled = true;
 
-    console.log('已完成草图绘制，保留场景元素');
-
-    // 6. 上传完成后刷新草图列表
-    await this.sketchData.refreshSketchList();
-
-    // 7. 先写入历史，再更新高亮，保证 ExtrudeManager 能在 allSketchItems 中拾取到最新草图
-
-    this.highlightMgr.setItems(this.allSketch);
-    console.log('finishSketch', this.allSketch);
-
     this.app.renderOnce();
-
   }
-
+  
 }
 
 

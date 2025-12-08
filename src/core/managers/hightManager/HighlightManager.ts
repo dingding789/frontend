@@ -35,45 +35,7 @@ export class HighlightManager {
     this.allItems = items; // 将传入的草图项数组赋值给 allItems 属性
   }
 
-  // /**
-  //  * 根据草图id高亮对应草图
-  //  * @param sketchId 草图id
-  //  */
-  // public async highlightBySketchId(sketchId: number | string) {
-  //   try {
-  //     // 先尝试通过 manager.sketchList 找到对应的索引（allSketchItems 的数组顺序与 sketchList 对应）
-  //     const sketchList = this.manager.sketchList?.value || [];
-  //     let found: SketchItem[] | null = null;//声明变量，初始值为null，便于后续查找并保存找到的草图数组
-  //     //sketchlist是所有草图的数组，每个元素有唯一的id
-  //     //返回值sketchIndex是找到的草图项在数组中的下标，如果未找到则为-1
-  //     let sketchIndex = sketchList.findIndex((item: any) => String(item.id) === String(sketchId));
-  //     if (sketchIndex >= 0 && this.manager.allSketchItems && this.manager.allSketchItems[sketchIndex]) {
-  //       found = this.manager.allSketchItems[sketchIndex];
-  //     }
-  //     // 如果未找到，尝试通过 manager.sketchData.loadById 加载该草图（如果可用）
-  //     // if (!found && this.manager.sketchData && typeof this.manager.sketchData.loadById === 'function') {
-  //     //   // 如果尚未加载该草图，尝试通过后端加载（loadById）
-  //     //   await this.manager.sketchData.loadById(Number(sketchId));
-  //     //   // 加载后，sketchList 与 allSketchItems 应已更新，重新查找索引
-  //     //   const sketchList2 = this.manager.sketchList?.value || [];
-  //     //   const newIndex = sketchList2.findIndex((item: any) => String(item.id) === String(sketchId));
-  //     //   if (newIndex >= 0 && this.manager.allSketchItems && this.manager.allSketchItems[newIndex]) {
-  //     //     found = this.manager.allSketchItems[newIndex];
-  //     //   }
-  //     // }
-  //     // 如果找到则高亮并渲染（持久高亮）
-  //     if (found) {
-  //       this.highlight(found, true);
-  //       this.app.renderOnce();
-  //     } else {
-  //       // 未找到则取消持久高亮并渲染
-  //       this.highlight(null, false);
-  //       this.app.renderOnce();
-  //     }
-  //   } catch (err) {
-  //     console.error('[HighlightManager] highlightBySketchId 错误', err);
-  //   }
-  // }
+
 
   /**
    * 高亮指定的草图项数组，如果已有高亮项则恢复其正常颜色

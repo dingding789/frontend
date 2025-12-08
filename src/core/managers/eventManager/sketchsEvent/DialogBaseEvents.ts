@@ -81,13 +81,14 @@ export class DialogMouseDownEvent extends MouseEventBase {
     };
 
     // 绑定原生 mousemove / mouseup，将原生事件转为自定义事件（dialog-mousemove / dialog-mouseup）
+    // 修改：必须使用 passive: false，否则后续 preventDefault 会触发报错
     window.addEventListener('mousemove', this.nativeMoveHandler, { passive: false });
-    window.addEventListener('mouseup', this.nativeUpHandler, { passive: true });
+    window.addEventListener('mouseup', this.nativeUpHandler, { passive: false });
 
     const renderer = this.app?.renderer;
     if (renderer?.domElement) {
       renderer.domElement.addEventListener('mousemove', this.nativeMoveHandler, { passive: false });
-      renderer.domElement.addEventListener('mouseup', this.nativeUpHandler, { passive: true });
+      renderer.domElement.addEventListener('mouseup', this.nativeUpHandler, { passive: false });
     }
   }
 
@@ -191,13 +192,16 @@ export class DialogMouseUpEvent extends MouseEventBase {
 
   private handleUp(e: CustomEvent<DialogEventDetail>) {
     const ev = e.detail?.event;
-    // If there's no related event or it's not a left-button release, ignore.
+    // 如果没有事件或不是左键释放，忽略
     if (!ev || ev.button !== 0) return;
 
-    // Prevent default behavior for the synthetic handling.
-    try { ev.preventDefault(); } catch {}
+    // 防御：不强制调用 preventDefault，避免 passive 场景报错
+    try {
+      // 仅在可取消的事件里调用
+      if (ev.cancelable) ev.preventDefault();
+    } catch {}
 
-    // Clear shared dragging state to end dragging.
+    // 清理拖拽状态
     draggingState = null;
   }
 }

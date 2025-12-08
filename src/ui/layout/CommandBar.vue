@@ -9,7 +9,6 @@
     </template>
 
     <template v-else>
-      <!-- 改为调用处理函数：先关闭其它对话框 -->
       <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handleFinishSketchClick">完成草图</button>
       <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handlePointClick">点</button>
       <button class="px-3 py-1 hover:bg-gray-700 rounded" @click="handleLineClick">直线</button>
@@ -26,7 +25,6 @@
     v-if="showRectDialog"
     :app="app"
     :manager="sketch"
-    @select="handleRectModeSelect"
     @close="showRectDialog = false"
   />
 
@@ -72,17 +70,24 @@ import * as THREE from 'three';
 import type { ExtrudeItem } from '../../core/geometry/features/ExtrudeItem';
 import ArcDialog from '../dialogs/ArcDialog.vue';
 import SplineCurveDialog from '../dialogs/SplineCurveDialog.vue';
+import { SketchEditManager } from '../../core/managers/sketchManager/SketchEditManager';
 
 const app = AppManager.getInstance();
 const sketch = app.sketchMgr;
 const extrude = reactive(app.extrudeMgr); // 让其他简单属性也可响应（可选）
+
+// 初始化编辑管理器（复用于回滚编辑会话）
+const sketchEditManager: SketchEditManager =
+  (sketch as any).sketchEditManager || new SketchEditManager(app, sketch);
+(sketch as any).sketchEditManager = sketchEditManager;
 
 const showRectDialog = ref(false);
 const showCircleDialog = ref(false);
 const showArcDialog = ref(false);
 const showSplineCurveDialog = ref(false);
 
-
+// 新增：记录当前是否为“编辑已有草图”模式（即双击进入）
+const editingSketchId = ref<number | string | null>(null);
 
 // 统一关闭：圆、圆弧、样条对话框（除 except 指定的外），并广播事件给对话框自处理
 function closeSketchDialogs(except?: 'circle' | 'arc' | 'spline', tool?: string) {
@@ -101,10 +106,30 @@ function handleStartSketchClick() {
   closeSketchDialogs(undefined, 'startSketch');
   sketch.startSketch();
 }
-function handleFinishSketchClick() {
+//可能没有用了
+// 供外部调用（如 List.vue）——双击草图时调用此方法
+// function handleSketchDblClick(id: number | string) {
+//   closeSketchDialogs(undefined, 'startSketch');
+//   editingSketchId.value = id;
+
+//   const select = sketchEditManager.startEditSession(id);
+//   if (!select) {
+//     console.warn('未能进入草图编辑会话,id=', id);
+//     return;
+//   }
+//   try {
+//     (sketch.sketchSession as any).editingSketchId = id;
+//     (sketch as any).editingSketchId = id;
+//   } catch {}
+//   try { app.renderOnce?.(); } catch {}
+// }
+
+// 完成草图：统一调用 finishSketch，它会自动判断是编辑还是新建
+async function handleFinishSketchClick() {
   closeSketchDialogs(undefined, 'select');
-  sketch.finishSketch();
+  await sketch.finishSketch(true); // 改为调用 finishSketch，而不是直接调用编辑管理器
 }
+
 function handlePointClick() {
   closeSketchDialogs(undefined, 'point');
   sketch.sketchSession.setTool('point');
@@ -123,20 +148,9 @@ function handleRectClick() {
 
 // 仅切换矩形模式，不关闭对话框（保持位置不变）
 function handleRectModeSelect(mode: 'two-point' | 'three-point') {
-  // 启用矩形工具（与直线等一致，确保捕获鼠标）
-  try { sketch.sketchSession.setTool('rect'); } catch {}
-  try { (sketch as any).setTool?.('rect'); } catch {}
-
-  // 设置矩形模式并进入绘制
-  try { (sketch as any)?.setRectMode?.(mode); } catch {}
-  try { (sketch.sketchSession as any)?.setRectMode?.(mode); } catch {}
-  try { (sketch as any).rectMode = mode; } catch {}
-  try { (sketch as any).isDrawing = true; } catch {}
-  try { (sketch as any).currentTool = 'rect'; } catch {}
-
-  // 不关闭对话框，不重置位置
-  try { app?.renderOnce?.(); } catch {}
+  // 留空：RectModeDialog 内部处理逻辑
 }
+
 function handleCircleClick() {
   // 打开“圆”对话框，先关闭其他两个
   closeSketchDialogs('circle', 'circle');
@@ -164,6 +178,7 @@ function handleExtrudeClick() {
   extrude.enablePickMode();
 }
 
+//(window as any).handleSketchDblClick = handleSketchDblClick;
 
 onMounted(() => {
   app.animate(() => {
