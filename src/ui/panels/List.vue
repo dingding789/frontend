@@ -26,6 +26,7 @@
         :class="{ 'bg-blue-800': selectedId !== null && Number(item.id) === selectedId }"
         @click="handleSketchClick(item.id)"
         @dblclick="handleSketchDblClick(item.id)"
+        @contextmenu.prevent="openDialog(item, $event)"
         tabindex="0"
         @keydown.enter.prevent="handleSketchClick(item.id)"
       >
@@ -57,15 +58,20 @@
               <path d="M1 1l22 22"/>
             </svg>
           </button>
-          <button
-            class="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded"
-            @mousedown.stop="remove(item.id)"
-          >
-            删除
-          </button>
         </div>
       </li>
     </ul>
+
+    <!-- 右键对话框（贴合：列表项右侧） -->
+    <ListDialog
+      v-if="dialogVisible && dialogData"
+      :id="dialogData!.id"
+      :name="dialogData!.name ?? ''"
+      :isHidden="hideMgr.isHidden(dialogData!.id)"
+      :x="dialogPos.x"
+      :y="dialogPos.y"
+      @close="closeDialog"
+    />
   </div>
 </template>
 
@@ -74,6 +80,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import AppManager from '../../core/AppManager';
 import { SketchEditManager } from '../../core/managers/sketchManager/SketchEditManager';
 import { SketchHideManager } from '../../core/managers/sketchManager/SketchHide';
+import ListDialog from '../dialogs/ListDialog.vue';
 
 const app = AppManager.getInstance();
 const sketchMgr = app.sketchMgr;
@@ -87,6 +94,10 @@ const hideMgr: SketchHideManager =
 const sketchEditManager: SketchEditManager =
   (sketchMgr as any).sketchEditManager || new SketchEditManager(app, sketchMgr);
 (sketchMgr as any).sketchEditManager = sketchEditManager;
+
+const dialogVisible = ref(false);
+const dialogData = ref<{ id: number | string; name?: string } | null>(null);
+const dialogPos = ref<{ x: number; y: number }>({ x: 0, y: 0 });
 
 function normalizeId(id: any): number | null {
   const n = Number(id);
@@ -190,6 +201,27 @@ async function remove(id: number) {
 
 function onSketchPicked(id: number | string | null) {
   selectedId.value = id == null ? null : Number(id);
+}
+
+function openDialog(item: any, e: MouseEvent) {
+  dialogData.value = { id: item.id, name: item.name };
+  const target = e.currentTarget as HTMLElement | null;
+  const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+  const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  if (target) {
+    const rect = target.getBoundingClientRect();
+    // 贴合：对话框左侧 = 目标 div 的右侧；上边缘平齐
+    const gap = 8; // 与列表项右侧的间距（可调）
+    dialogPos.value = { x: Math.round(rect.right + scrollX + gap), y: Math.round(rect.top + scrollY) };
+  } else {
+    dialogPos.value = { x: e.pageX + 8, y: e.pageY };
+  }
+  dialogVisible.value = true;
+}
+
+function closeDialog() {
+  dialogVisible.value = false;
+  dialogData.value = null;
 }
 
 onMounted(() => {
