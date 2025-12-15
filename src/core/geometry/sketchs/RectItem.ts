@@ -1,190 +1,347 @@
+// RectItem.ts
 import * as THREE from 'three';
 import { SketchItem } from './SketchItem';
 
-/**
- * RectItem
- * 表示具有任意方向的矩形（通过四个角点）
- * 支持多种序列化格式，包含绘制、预览、数据转换等方法
- * 静态方法 handleRectTool 用于草图交互逻辑
- */
+type RectMode = 'twoPoint' | 'threePoint';
+function normalizeMode(mode: any): RectMode {
+  return (mode === 'three-point' || mode === 'threePoint') ? 'threePoint' : 'twoPoint';
+}
 
-/**
- * RectItem: 表示具有任意方向的矩形（通过四个角点）
- * - 保存 corners: [A,B,C,D]
- * - draw() 会绘制闭合线环
- * - toJSON()/fromJSON() 支持 corners 字段（优先），并兼容老的 start/end 对角点格式
- */
 export class RectItem extends SketchItem {
-  public corners: [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3];
+  public mode: RectMode;
+  public start?: THREE.Vector3;
+  public end?: THREE.Vector3;     // 两点对角 / 三点中心线终点
+  public p3?: THREE.Vector3;      // 三点宽度点
+  public corners: [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3] | null = null;
 
-  constructor(A: THREE.Vector3, B: THREE.Vector3, C: THREE.Vector3, D: THREE.Vector3) {
-    super("rect");
-    this.corners = [A.clone(), B.clone(), C.clone(), D.clone()];
+  // 交互阶段：
+  // twoPoint: 0(已有start，预览) -> 完成
+  // threePoint: 0(中心线预览) -> 1(宽度预览) -> 完成
+  public stage: 0 | 1 | 2 = 0;
+
+  // 仅预览使用（不写入最终）
+  private previewEnd?: THREE.Vector3; // 两点/三点中心线预览点
+  private previewP3?: THREE.Vector3;  // 三点宽度预览点
+
+  // 预览对象缓存（虚线）
+  private previewLine?: THREE.Line;   // 中心线
+  private previewRect?: THREE.Line;   // 矩形
+
+  constructor(
+    mode: RectMode | string,
+    start?: THREE.Vector3,
+    end?: THREE.Vector3,
+    p3?: THREE.Vector3,
+    planeNormal?: THREE.Vector3
+  ) {
+    super('rect');
+    this.mode = normalizeMode(mode);
+    this.start = start?.clone();
+    this.end = end?.clone();
+    this.p3 = p3?.clone();
+    this.planeNormal = (planeNormal?.clone() ?? new THREE.Vector3(0, 0, 1)).normalize();
+    if (this.start && this.end && (this.mode === 'twoPoint' || (this.mode === 'threePoint' && this.p3))) {
+      this.computeCorners();
+    }
+  }
+
+  // 基向量（与草图平面一致）
+  private static basisFromNormal(planeNormal: THREE.Vector3) {
+    const normal = planeNormal.clone().normalize();
+    const ref = Math.abs(normal.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+    const u = new THREE.Vector3().crossVectors(normal, ref).normalize();
+    const v = new THREE.Vector3().crossVectors(normal, u).normalize();
+    return { u, v, n: normal };
+  }
+
+  private makeCornersTwoPoint(pointA: THREE.Vector3, pointB: THREE.Vector3): [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3] {
+    // 通过草图平面法向量获得正交基
+    const { u: axisU, v: axisV } = RectItem.basisFromNormal(this.planeNormal!);
+    // 计算对角线中点
+    const mid = new THREE.Vector3().addVectors(pointA, pointB).multiplyScalar(0.5);
+    // 计算对角线向量的一半
+    const half = new THREE.Vector3().subVectors(pointB, pointA).multiplyScalar(0.5);
+    // 在正交基上的投影长度
+    const du = half.dot(axisU);
+    const dv = half.dot(axisV);
+    // 沿正交基方向的向量
+    const U = axisU.clone().multiplyScalar(du);
+    const V = axisV.clone().multiplyScalar(dv);
+    // 计算四个角点
+    const cornerA = mid.clone().add(U).add(V);
+    const cornerB = mid.clone().sub(U).add(V);
+    const cornerC = mid.clone().sub(U).sub(V);
+    const cornerD = mid.clone().add(U).sub(V);
+    // 返回四个角点
+    return [cornerA, cornerB, cornerC, cornerD];
+  }
+
+  computeCorners(): [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3] {
+    if (!this.start || !this.end) {
+      const zero = new THREE.Vector3();
+      this.corners = [zero, zero.clone(), zero.clone(), zero.clone()];
+      return this.corners;
+    }
+    if (this.mode === 'twoPoint') {
+      this.corners = this.makeCornersTwoPoint(this.start, this.end);
+      return this.corners;
+    }
+    if (this.mode === 'threePoint' && this.p3) {
+      const point1 = this.start.clone();
+      const point2 = this.end.clone();
+      const normal = this.planeNormal!.clone().normalize();
+      const tangent = new THREE.Vector3().subVectors(point2, point1);
+      const length = tangent.length();
+      if (length < 1e-8) {
+        this.corners = [point1, point1.clone(), point1.clone(), point1.clone()];
+        return this.corners;
+      }
+      tangent.divideScalar(length);
+      let axisU = new THREE.Vector3().crossVectors(normal, tangent);
+      if (axisU.lengthSq() < 1e-12) {
+        const alt = Math.abs(normal.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+        axisU = new THREE.Vector3().crossVectors(normal, alt).normalize();
+      } else axisU.normalize();
+      const mid = new THREE.Vector3().addVectors(point1, point2).multiplyScalar(0.5);
+      const halfWidth = new THREE.Vector3().subVectors(this.p3.clone(), mid).dot(axisU);
+      // 避免退化（半宽为0时给微小偏移）
+      const offset = axisU.clone().multiplyScalar(Math.abs(halfWidth) < 1e-9 ? (halfWidth >= 0 ? 1e-6 : -1e-6) : halfWidth);
+      const cornerA = point1.clone().add(offset);
+      const cornerB = point2.clone().add(offset);
+      const cornerC = point2.clone().sub(offset);
+      const cornerD = point1.clone().sub(offset);
+      this.corners = [cornerA, cornerB, cornerC, cornerD];
+      return this.corners;
+    }
+    const zero = new THREE.Vector3();
+    this.corners = [zero, zero.clone(), zero.clone(), zero.clone()];
+    return this.corners;
+  }
+
+  // ---------- 预览对象复用 ----------
+  private ensurePreviewLine(scene: THREE.Scene) {
+    if (this.previewLine) return;
+    const geom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+    const mat = new THREE.LineDashedMaterial({ color: 0x00ffff, dashSize: 0.6, gapSize: 0.3 });
+    const line = new THREE.Line(geom, mat);
+    (line as any).computeLineDistances?.();
+    line.userData.isSketchPreview = true;
+    this.previewLine = line;
+    scene.add(line);
+  }
+  private updatePreviewLine(startPoint: THREE.Vector3, endPoint: THREE.Vector3) {
+    if (!this.previewLine) return;
+    const pos = (this.previewLine.geometry as THREE.BufferGeometry).getAttribute('position') as THREE.BufferAttribute;
+    pos.setXYZ(0, startPoint.x, startPoint.y, startPoint.z);
+    pos.setXYZ(1, endPoint.x, endPoint.y, endPoint.z);
+    pos.needsUpdate = true;
+    (this.previewLine as any).computeLineDistances?.();
+  }
+
+  private ensurePreviewRect(scene: THREE.Scene) {
+    if (this.previewRect) return;
+    // 5点闭合
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(5 * 3), 3));
+    const mat = new THREE.LineDashedMaterial({ color: 0x00ffff, dashSize: 0.6, gapSize: 0.3 });
+    const line = new THREE.Line(geom, mat);
+    (line as any).computeLineDistances?.();
+    line.userData.isSketchPreview = true;
+    this.previewRect = line;
+    scene.add(line);
+  }
+  private updatePreviewRect(corners: [THREE.Vector3, THREE.Vector3, THREE.Vector3, THREE.Vector3]) {
+    if (!this.previewRect) return;
+    const pos = (this.previewRect.geometry as THREE.BufferGeometry).getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < 4; i++) pos.setXYZ(i, corners[i].x, corners[i].y, corners[i].z);
+    pos.setXYZ(4, corners[0].x, corners[0].y, corners[0].z);
+    pos.needsUpdate = true;
+    (this.previewRect as any).computeLineDistances?.();
+  }
+  private removePreview(scene: THREE.Scene) {
+    if (this.previewLine) {
+      try { scene.remove(this.previewLine); } catch {}
+      this.previewLine.geometry.dispose();
+      (this.previewLine.material as any).dispose?.();
+      this.previewLine = undefined;
+    }
+    if (this.previewRect) {
+      try { scene.remove(this.previewRect); } catch {}
+      this.previewRect.geometry.dispose();
+      (this.previewRect.material as any).dispose?.();
+      this.previewRect = undefined;
+    }
+  }
+
+  // --------- 最终绘制 ---------
+  remove(scene: THREE.Scene) {
+    // 移除最终绘制对象
+    if (this.object3D) {
+      try { scene.remove(this.object3D); } catch {}
+      if ((this.object3D as any).geometry) (this.object3D as any).geometry.dispose();
+      if ((this.object3D as any).material && (this.object3D as any).material.dispose) (this.object3D as any).material.dispose();
+      this.object3D = undefined as any;
+    }
+    // 清除可能残留的预览对象
+    this.removePreview(scene);
   }
 
   draw(scene: THREE.Scene) {
+    // 这里只绘制最终对象，不在此创建预览
+    if (!this.corners) this.computeCorners();
+    if (!this.corners) return;
     this.remove(scene);
-    const pts = [...this.corners, this.corners[0]];
-    const geom = new THREE.BufferGeometry().setFromPoints(pts);
+    const points = [...this.corners, this.corners[0]];
+    const geom = new THREE.BufferGeometry().setFromPoints(points);
     const mat = new THREE.LineBasicMaterial({ color: 0x00ffff });
     const line = new THREE.Line(geom, mat);
+    line.userData.isSketchItem = true;
     this.object3D = line;
-    this.object3D.userData.isSketchItem = true;
-    scene.add(this.object3D);
+    scene.add(line);
   }
 
+  // --------- 实时预览（由 mousemove 调用） ---------
   drawPreview(scene: THREE.Scene, cursorPos?: THREE.Vector3) {
-    // preview 与正式绘制相同（此类主要用作最终项）
-    this.draw(scene);
+    if (!cursorPos || !this.start) return;
+
+    if (this.mode === 'twoPoint') {
+      if (this.stage !== 0) return;
+      this.previewEnd = cursorPos.clone();
+      const corners = this.makeCornersTwoPoint(this.start, this.previewEnd);
+      this.ensurePreviewRect(scene);
+      this.updatePreviewRect(corners);
+      return;
+    }
+
+    if (this.mode === 'threePoint') {
+      if (this.stage === 0) {
+        // 中心线预览
+        this.previewEnd = cursorPos.clone();
+        this.ensurePreviewLine(scene);
+        this.updatePreviewLine(this.start.clone(), this.previewEnd.clone());
+        return;
+      }
+      if (this.stage === 1 && this.end) {
+        // 宽度预览：临时用 cursor 做 p3
+        this.previewP3 = cursorPos.clone();
+        const savedP3 = this.p3;
+        this.p3 = this.previewP3;
+        const corners = this.computeCorners();
+        this.p3 = savedP3;
+        this.ensurePreviewRect(scene);
+        this.updatePreviewRect(corners);
+        return;
+      }
+    }
   }
 
+  // --------- 点击推进（由 mousedown 调用） ---------
+  static handleRectTool(app: any, manager: any, hit: THREE.Vector3, modeIn: RectMode | string, plane?: THREE.Plane) {
+    const mode = normalizeMode(modeIn);
+    const planeNormal = plane?.normal?.clone() ?? new THREE.Vector3(0, 0, 1);
+
+    // 初始化（第一次点击）
+    if (!manager.previewItem || !(manager.previewItem instanceof RectItem) || manager.previewItem.mode !== mode) {
+      const newRectItem = new RectItem(mode, hit.clone(), undefined, undefined, planeNormal);
+      // 开启预览阶段
+      newRectItem.stage = 0;
+      manager.previewItem = newRectItem;
+      return;
+    }
+
+    const previewRectItem = manager.previewItem as RectItem;
+
+    if (mode === 'twoPoint') {
+      if (previewRectItem.stage === 0) {
+        // 第二次点击：完成
+        previewRectItem.end = (previewRectItem.previewEnd ?? hit).clone();
+        previewRectItem.computeCorners();
+        previewRectItem.removePreview(app.scene);
+
+        // 构造最终矩形对象
+        const finalRect = new RectItem(
+          'twoPoint',
+          previewRectItem.start!.clone(),
+          previewRectItem.end.clone(),
+          undefined,
+          previewRectItem.planeNormal!.clone()
+        );
+        finalRect.computeCorners();
+        finalRect.draw(app.scene);
+        pushSketchItem(manager, finalRect);
+
+        // 连续绘制：仅清理预览，不退出工具
+        manager.previewItem = null;
+        app.renderOnce?.();
+      }
+      return;
+    }
+
+    if (mode === 'threePoint') {
+      if (previewRectItem.stage === 0) {
+        // 第二次点击：锁定中心线终点，进入宽度预览
+        previewRectItem.end = (previewRectItem.previewEnd ?? hit).clone();
+        previewRectItem.stage = 1;
+        // 切换预览形态，下一步预览宽度
+        previewRectItem.removePreview(app.scene);
+        app.renderOnce?.();
+        return;
+      }
+      if (previewRectItem.stage === 1) {
+        // 第三次点击：锁定宽度点，完成
+        previewRectItem.p3 = (previewRectItem.previewP3 ?? hit).clone();
+        previewRectItem.computeCorners();
+        previewRectItem.removePreview(app.scene);
+
+        // 构造最终三点矩形对象
+        const finalRect = new RectItem(
+          'threePoint',
+          previewRectItem.start!.clone(),
+          previewRectItem.end!.clone(),
+          previewRectItem.p3!.clone(),
+          previewRectItem.planeNormal!.clone()
+        );
+        finalRect.computeCorners();
+        finalRect.draw(app.scene);
+        pushSketchItem(manager, finalRect);
+
+        // 连续绘制：仅清理预览，不退出工具
+        manager.previewItem = null;
+        app.renderOnce?.();
+        return;
+      }
+    }
+  }
+
+  // --------- 序列化 ---------
   toJSON() {
-    // 同时包含兼容字段：corners（完整四角）以及 start/end（对角）
-    // 另外加入简洁描述 rectSpec，便于后端以更小的数据量保存矩形：
-    // rectSpec = { center: [x,y,z], width: number, height: number, dir: [ux,uy,uz], normal?: [nx,ny,nz] }
-    const corners = this.corners.map(c => c.toArray());
-    const start = this.corners[0].toArray();
-    const end = this.corners[2].toArray();
-
-    // 计算中心、宽高、方向与法向
-    const A = this.corners[0];
-    const B = this.corners[1];
-    const C = this.corners[2];
-    const center = new THREE.Vector3().addVectors(A, C).multiplyScalar(0.5).toArray();
-    const width = A.distanceTo(B);
-    const height = B.distanceTo(C);
-    const dirVec = new THREE.Vector3().subVectors(B, A);
-    const dirLen = dirVec.length() || 1;
-    const dir = dirVec.clone().divideScalar(dirLen).toArray();
-    // 法向按 AB x AD
-    const AD = new THREE.Vector3().subVectors(this.corners[3], A);
-    const normal = new THREE.Vector3().crossVectors(dirVec, AD).normalize().toArray();
-
     return {
       type: 'rect',
-      corners,
-      start,
-      end,
-      rectSpec: {
-        center,
-        width,
-        height,
-        dir,
-        normal,
-      },
+      mode: this.mode,
+      start: this.start?.toArray() ?? null,
+      end: this.end?.toArray() ?? null,
+      p3: this.p3?.toArray() ?? null,
+      planeNormal: this.planeNormal?.toArray() ?? null,
+      corners: this.corners?.map(corner => corner.toArray()) ?? null
     };
   }
 
   static fromJSON(data: any): RectItem {
-    // 优先支持完整 corners
-    if (Array.isArray(data?.corners) && data.corners.length === 4) {
-      const [A, B, C, D] = data.corners.map((p: any) => new THREE.Vector3(...p));
-      return new RectItem(A, B, C, D);
+    const start = data.start ? new THREE.Vector3(...data.start) : undefined;
+    const end = data.end ? new THREE.Vector3(...data.end) : undefined;
+    const p3 = data.p3 ? new THREE.Vector3(...data.p3) : undefined;
+    const planeNormal = data.planeNormal ? new THREE.Vector3(...data.planeNormal) : undefined;
+    const item = new RectItem(normalizeMode(data.mode), start, end, p3, planeNormal);
+    if (!item.corners && start && end && (item.mode === 'twoPoint' || (item.mode === 'threePoint' && p3))) {
+      item.computeCorners();
     }
-
-    // 支持简洁格式 rectSpec
-    if (data?.rectSpec) {
-      try {
-        const spec = data.rectSpec;
-        const center = new THREE.Vector3(...(spec.center || [0, 0, 0]));
-        const width = Number(spec.width) || 0;
-        const height = Number(spec.height) || 0;
-        const dirArr = Array.isArray(spec.dir) ? spec.dir : [1, 0, 0];
-        const normalArr = Array.isArray(spec.normal) ? spec.normal : null;
-
-        const dir = new THREE.Vector3(...dirArr).normalize();
-        let normal = normalArr ? new THREE.Vector3(...normalArr).normalize() : null;
-        if (!normal || normal.length() < 1e-6) {
-          // 若未提供法向，则从 dir 选一稳定法向（优先 Z 方向或 X 轴组合）
-          normal = Math.abs(dir.z) < 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
-        }
-
-        const u = dir.clone().multiplyScalar(width / 2);
-        const v = new THREE.Vector3().crossVectors(normal, dir).normalize().multiplyScalar(height / 2);
-
-        const A = center.clone().sub(u).sub(v);
-        const B = center.clone().add(u).sub(v);
-        const C = center.clone().add(u).add(v);
-        const D = center.clone().sub(u).add(v);
-        return new RectItem(A, B, C, D);
-      } catch {
-        // fallthrough
-      }
-    }
-
-    // 兼容旧格式 start/end（对角），若不符合则返回一个退化的零尺寸矩形
-    if (Array.isArray(data?.start) && Array.isArray(data?.end)) {
-      const a = new THREE.Vector3(...data.start);
-      const c = new THREE.Vector3(...data.end);
-      // 简单按轴/平面组合生成四角，类似 RectPreviewItem.computeCorners
-      const eps = 1e-6;
-      let constAxis: 'x' | 'y' | 'z' = 'z';
-      if (Math.abs(a.x - c.x) < eps) constAxis = 'x';
-      else if (Math.abs(a.y - c.y) < eps) constAxis = 'y';
-
-      let b: THREE.Vector3, d: THREE.Vector3;
-      if (constAxis === 'z') {
-        const z = a.z;
-        b = new THREE.Vector3(a.x, c.y, z);
-        d = new THREE.Vector3(c.x, a.y, z);
-      } else if (constAxis === 'x') {
-        const x = a.x;
-        b = new THREE.Vector3(x, a.y, c.z);
-        d = new THREE.Vector3(x, c.y, a.z);
-      } else {
-        const y = a.y;
-        b = new THREE.Vector3(a.x, y, c.z);
-        d = new THREE.Vector3(c.x, y, a.z);
-      }
-      return new RectItem(a, b, c, d);
-    }
-
-    // 退化为零矩形
-    const z0 = 0;
-    const p = new THREE.Vector3(0, 0, z0);
-    return new RectItem(p, p.clone(), p.clone(), p.clone());
+    return item;
   }
+}
 
-  static handleRectTool(app: any, manager: any, intersect: THREE.Vector3, mode: string, plane: THREE.Plane) {
-    if (mode === 'two-point') {
-      const PreviewCtor = manager.RectPreviewItem;
-      if (!PreviewCtor) throw new Error('RectPreviewItem 构造器未注册');
-      if (!manager.previewItem || !(manager.previewItem instanceof PreviewCtor)) {
-        manager.previewItem = new PreviewCtor(intersect.clone());
-      } else {
-        const r = manager.previewItem;
-        r.end = intersect.clone();
-        r.remove(app.scene);
-        const a = r.start.clone();
-        const c = r.end.clone();
-        const [A, B, C, D] = r.constructor.computeCorners(a, c);
-        const rect = new RectItem(A, B, C, D);
-        rect.draw(app.scene);
-        manager.sketchItems.value.push(rect);
-        manager.previewItem = null;
-      }
-    } else {
-      const planeNormal = plane?.normal.clone() ?? new THREE.Vector3(0,0,1);
-      const PreviewCtor = manager.Rect3PreviewItem;
-      if (!PreviewCtor) throw new Error('Rect3PreviewItem 构造器未注册');
-      if (!manager.previewItem || !(manager.previewItem instanceof PreviewCtor)) {
-        manager.previewItem = new PreviewCtor(intersect.clone(), planeNormal);
-      } else {
-        const r3 = manager.previewItem;
-        if (!r3.p2) {
-          r3.p2 = intersect.clone();
-        } else {
-          const p1 = r3.p1.clone();
-          const p2 = r3.p2.clone();
-          const p3 = intersect.clone();
-          const [A, B, C, D] = r3.constructor.computeCornersFromCenterline(p1, p2, p3, planeNormal);
-          r3.remove(app.scene);
-          const rect3 = new RectItem(A.clone(), B.clone(), C.clone(), D.clone());
-          rect3.draw(app.scene);
-          manager.sketchItems.value.push(rect3);
-          manager.previewItem = null;
-        }
-      }
-    }
-  }
+function pushSketchItem(manager: any, item: any) {
+  try {
+    if (manager.sketch.items.push) manager.sketch.items.push(item);
+    else manager.sketch.items.push(item);
+  } catch {}
 }

@@ -1,10 +1,9 @@
 <template>
   <div class="p-4 bg-gray-900 rounded-lg shadow min-h-[80px] max-h-[950px] overflow-auto">
-    <!-- 标题栏 -->
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-lg font-bold text-gray-200">草图列表</h2>
-      <button
-        class="flex items-center text-sm text-gray-300 hover:text-white transition"
+      <button 
+        class="flex items-center text-sm text-gray-300 hover:text-white transition" 
         @click="refresh"
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -15,7 +14,6 @@
       </button>
     </div>
 
-    <!-- 列表区域 -->
     <div v-if="list.length === 0" class="text-gray-400 italic text-sm">
       暂无草图，请先绘制或保存。
     </div>
@@ -25,86 +23,228 @@
         v-for="item in list"
         :key="item.id"
         class="p-2 border border-gray-700 rounded flex justify-between items-center hover:bg-gray-800 transition cursor-pointer"
-        :class="{ 'bg-blue-800': selectedId === item.id }"
-        :style="{ backgroundColor: selectedId === item.id ? '#1e40af' : '' }"
-        @mousedown="load(item.id)"
+        :class="{ 'bg-blue-800': selectedId !== null && Number(item.id) === selectedId }"
+        @click="handleSketchClick(item.id)"
+        @dblclick="handleSketchDblClick(item.id)"
+        @contextmenu.prevent="openDialog(item, $event)"
         tabindex="0"
-        @keydown.enter.prevent="load(item.id)"
+        @keydown.enter.prevent="handleSketchClick(item.id)"
       >
         <div class="flex-1 text-gray-200 truncate">
           {{ item.name }}
         </div>
-
         <div class="flex space-x-2">
-          <!-- <button
-            class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded"
-            @click="load(item.id)"
-          >
-            加载
-          </button> -->
           <button
-            class="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded"
-            @mousedown.stop="remove(item.id)"
+            class="w-6 h-6 flex items-center justify-center rounded transition"
+            :class="hideMgr.isHidden(item.id)
+              ? 'bg-gray-700 hover:bg-gray-600'
+              : 'bg-gray-600 hover:bg-gray-500'"
+            @mousedown.stop="toggleHide(item.id)"
+            :title="hideMgr.isHidden(item.id) ? '显示草图' : '隐藏草图'"
+            aria-label="切换可见性"
           >
-            删除
+            <svg v-if="!hideMgr.isHidden(item.id)" xmlns="http://www.w3.org/2000/svg"
+                 viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 class="w-4 h-4 text-yellow-300">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg"
+                 viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 class="w-4 h-4 text-gray-300">
+              <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.86 21.86 0 0 1 5.06-6.94M9.53 9.53a3 3 0 0 0 4.24 4.24"/>
+              <path d="M1 1l22 22"/>
+            </svg>
           </button>
         </div>
       </li>
     </ul>
+
+    <!-- 右键对话框（贴合：列表项右侧） -->
+    <ListDialog
+      v-if="dialogVisible && dialogData"
+      :id="dialogData!.id"
+      :name="dialogData!.name ?? ''"
+      :isHidden="hideMgr.isHidden(dialogData!.id)"
+      :x="dialogPos.x"
+      :y="dialogPos.y"
+      @close="closeDialog"
+    />
   </div>
 </template>
 
 <script lang="ts" setup>
-import { onMounted } from 'vue'
-import AppManager from '../../core/scene/SceneManager';
-import SketchManager from '../../core/managers/sketchManager/SketchManager';
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue';
+import AppManager from '../../core/AppManager';
+import { SketchEditManager } from '../../core/managers/sketchManager/SketchEditManager';
+import { SketchHideManager } from '../../core/managers/sketchManager/SketchHide';
+import ListDialog from '../dialogs/ListDialog.vue';
+
 const app = AppManager.getInstance();
-const sketch = app.sketchMgr;
+const sketchMgr = app.sketchMgr;
 const selectedId = ref<number | null>(null);
-const list = sketch.sketchList;
+const list = sketchMgr.sketchList;
 
-// 挂载时加载草图列表
-onMounted(() => {
-  sketch.sketchData.loadAll()
-  
-})
-/** 刷新草图列表 */
-function refresh() {
-  sketch.sketchData.loadAll()
+const hideMgr: SketchHideManager =
+  (sketchMgr as any).hideMgr || new SketchHideManager(sketchMgr);
+(sketchMgr as any).hideMgr = hideMgr;
+
+const sketchEditManager: SketchEditManager =
+  (sketchMgr as any).sketchEditManager || new SketchEditManager(app, sketchMgr);
+(sketchMgr as any).sketchEditManager = sketchEditManager;
+
+const dialogVisible = ref(false);
+const dialogData = ref<{ id: number | string; name?: string } | null>(null);
+const dialogPos = ref<{ x: number; y: number }>({ x: 0, y: 0 });
+
+function normalizeId(id: any): number | null {
+  const n = Number(id);
+  return Number.isNaN(n) ? null : n;
 }
-/** 加载指定草图 */
-async function load(id: number) {
-  selectedId.value = id
+
+function resolveSketchItemsById(sketchId: number | string): any[] | null {
+  const sid = String(sketchId);
+  const gArr = (sketchMgr as any).allSketch;
+  if (Array.isArray(gArr)) {
+    const gHit = gArr.find((g: any) =>
+      String(g?.id) === sid ||
+      (g?.items?.[0] && String(g.items[0].id) === sid) ||
+      (g?.items?.[0]?.object3D?.userData?.sketchItem && 
+       String(g.items[0].object3D.userData.sketchItem.id) === sid)
+    );
+    if (gHit?.items?.length) return gHit.items;
+  }
+  return null;
+}
+
+function refresh() {
+  sketchMgr.sketchData.loadAll();
+}
+
+async function handleSketchClick(id: number | string) {
+  const numericId = normalizeId(id);
+  if (numericId == null) return;
+
+  const highlightManager = (sketchMgr as any).highlightMgr || (app as any).highlightMgr;
+  if (!highlightManager) return;
+
+  if (selectedId.value === numericId) {
+    selectedId.value = null;
+    if (typeof highlightManager.clearHighlight === 'function') {
+      highlightManager.clearHighlight();
+    } else {
+      highlightManager.highlight?.(null, false);
+      (sketchMgr as any)?.emit?.('sketch-picked', null);
+      app.renderOnce?.();
+    }
+    return;
+  }
+
+  selectedId.value = numericId;
+  const items = resolveSketchItemsById(numericId);
+  if (!items || items.length === 0) {
+    console.warn('未找到草图数据, id =', numericId);
+    return;
+  }
+
   try {
-    // 优先调用 HighlightManager 提供的按 id 高亮接口
-    if ((sketch as any).highlightMgr && typeof (sketch as any).highlightMgr.highlightBySketchId === 'function') {
-      await (sketch as any).highlightMgr.highlightBySketchId(id);
-      return;
+    if (typeof highlightManager.highlightBySketchId === 'function') {
+      await highlightManager.highlightBySketchId(numericId);
+    } else {
+      highlightManager.highlight?.(items, true);
+      (sketchMgr as any)?.emit?.('sketch-picked', numericId);
+      if (typeof (window as any).setListSelectedId === 'function') {
+        (window as any).setListSelectedId(numericId);
+      }
     }
-
-    // 向后兼容：如果没有该接口，回退到直接加载并调用 highlight
-    const idx = sketch.sketchList.value.findIndex((it: any) => it.id === id);
-    if (idx >= 0 && sketch.allSketchItems && sketch.allSketchItems[idx]) {
-      (sketch as any).highlightMgr?.highlight?.(sketch.allSketchItems[idx]);
-      app.renderOnce();
-      return;
-    }
-
-    await sketch.sketchData.loadById(id);
-    const newIdx = sketch.sketchList.value.findIndex((it: any) => it.id === id);
-    if (newIdx >= 0 && sketch.allSketchItems[newIdx]) {
-      (sketch as any).highlightMgr?.highlight?.(sketch.allSketchItems[newIdx]);
-      app.renderOnce();
-    }
-  } catch (err) {
-    console.error('加载或高亮草图失败', err);
+    app.renderOnce?.();
+  } catch (e) {
+    console.error('高亮失败', e);
   }
 }
 
-/** 删除指定草图 */
-async function remove(id: number) {
-  //if (!confirm('确定要删除该草图吗？')) return
-  await sketch.sketchData.deleteSketchByID(id)
+async function handleSketchDblClick(id: number | string) {
+  console.info('[List] 双击草图，id =', id);
+
+  const items = resolveSketchItemsById(id);
+  console.info('[List] 草图项数量 =', items?.length ?? 0);
+
+  if (typeof sketchEditManager.saveCameraState === 'function') {
+    sketchEditManager.saveCameraState();
+  }
+
+  const ok = sketchEditManager.focusCameraToSketchPlane(id);
+  if (!ok) {
+    console.warn('双击未能聚焦到草图平面, id =', id);
+  }
+
+  hideMgr.hideExcept(id);
+
+  const started = sketchEditManager.startEditSession(id, { clearOld: true });
+  if (!started) {
+    console.warn('未能进入编辑会话, id =', id);
+    return;
+  }
+
+  app.renderOnce?.();
 }
+
+function toggleHide(id: number | string) {
+  hideMgr.toggleById(id);
+}
+
+async function remove(id: number) {
+  await sketchMgr.sketchData.deleteSketchByID(id);
+}
+
+function onSketchPicked(id: number | string | null) {
+  selectedId.value = id == null ? null : Number(id);
+}
+
+function openDialog(item: any, e: MouseEvent) {
+  dialogData.value = { id: item.id, name: item.name };
+  const target = e.currentTarget as HTMLElement | null;
+  const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+  const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  if (target) {
+    const rect = target.getBoundingClientRect();
+    // 贴合：对话框左侧 = 目标 div 的右侧；上边缘平齐
+    const gap = 8; // 与列表项右侧的间距（可调）
+    dialogPos.value = { x: Math.round(rect.right + scrollX + gap), y: Math.round(rect.top + scrollY) };
+  } else {
+    dialogPos.value = { x: e.pageX + 8, y: e.pageY };
+  }
+  dialogVisible.value = true;
+}
+
+function closeDialog() {
+  dialogVisible.value = false;
+  dialogData.value = null;
+}
+
+onMounted(() => {
+  sketchMgr.sketchData.loadAll();
+  (sketchMgr as any)?.on?.('sketch-picked', onSketchPicked);
+});
+
+onUnmounted(() => {
+  (sketchMgr as any)?.off?.('sketch-picked', onSketchPicked);
+});
+
+(window as any).setListSelectedId = (id: number | string | null) => {
+  selectedId.value = id == null ? null : Number(id);
+};
 </script>
+
+<style scoped>
+.bg-blue-800 {
+  background-color: #1e40af !important;
+}
+
+button.w-6.h-6 {
+  padding: 0;
+  line-height: 1;
+}
+</style>

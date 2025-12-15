@@ -1,146 +1,114 @@
-import AppManager from "../../scene/SceneManager";
 import * as THREE from 'three';
-import { SketchItem } from '../../geometry/sketchs/SketchItem';
-import { toRaw } from 'vue';
-import { CircleItem } from '../../geometry/sketchs/CircleItem';
 import { ExtrudeItem } from '../../geometry/features/ExtrudeItem';
-import { onExtrudeMouseClick } from '../eventManager/featuresEvent/extrudeEvents';
-import { CircleExtrudeItem } from '../../geometry/features/CircleExtrudeItem';
-
+import { ref } from 'vue';
+import { SketchItem } from '../../geometry/sketchs';
 /**
- * ExtrudeManager
- * 从草图项（rect、circle 等）生成三维拉伸体，并管理相关事件
+ * ExtrudeManager 负责：
+ * 1. 草图拾取
+ * 2. 预览创建/更新
+ * 3. 确认拉伸
+ * 4. 与 Vue 弹窗（ExtrudeDialog.vue）通信
  */
 export class ExtrudeManager {
-  private app: AppManager; // 应用管理器实例
-  private material: THREE.MeshStandardMaterial; // 拉伸体的材质
-  private height = 10; // 默认拉伸高度
-  public eventManager: InstanceType<typeof ExtrudeManager.EventManager>; // 事件管理器实例
 
-  constructor(app: AppManager) {
+  private highlightedItem: SketchItem | SketchItem[] | null = null; // 当前高亮的草图项（可为单个或数组）
+  private allItems: SketchItem[] = []; // 所有草图项的集合
+  private raycaster = new THREE.Raycaster(); // 用于射线检测的 Raycaster
+  private mouse = new THREE.Vector2(); // 用于存储鼠标位置的 Vector2
+  private material = new THREE.MeshStandardMaterial({ color: 0x88ccff });
+
+  // 弹窗相关状态
+  public dialogVisible = ref(false);
+  public selectedSketch: any;
+  public startValue = 0;
+  public endValue = 10;
+
+  constructor(private app: any, private sketchManager: any) {
     this.app = app;
-    this.material = new THREE.MeshStandardMaterial({
-      color: 0x88ccff,
-      metalness: 0.2,
-      roughness: 0.6,
-    });
-    this.eventManager = new ExtrudeManager.EventManager(app, this.app.sketchMgr);
+    this.sketchManager = sketchManager;
   }
 
+  // 草图名称
+  public get selectedSketchName(): string {
+    if (!this.selectedSketch) return '';
+    const s: any = this.selectedSketch;
+    if (s.type === 'rect' && s.p1 && s.p2) return `矩形 (${s.p1}) → (${s.p2})`;
+    if (s.type === 'circle' && s.p1) return `圆心(${s.p1}) 半径 ${s.radius}`;
+    return s.name || s.id || s.type || 'sketch';
+  }
+
+  // 点击“选择草图”后启动一次性拾取
+  public enablePickMode() {
+    console.log('enable pick mode');
+    this.app.renderer.domElement.addEventListener('click', this.onMouseClick.bind(this));
+
+  }
+  // ---------------- 鼠标点击高亮 ----------------
   /**
-   * 从草图项创建拉伸几何体
-   * @param item 草图项对象，例如rect、circle等
-   * @param params 创建拉伸体时的参数，可选
-   * @param plane 拉伸体所在的平面，默认为'XY'
-   * @returns 返回生成的THREE.Mesh拉伸体对象，如果失败则返回null
+   * 鼠标点击事件处理函数
+   * @param event 鼠标点击事件
    */
-  public createExtrudeFromItem(item: any, params: any = {}, plane: string = 'XY'): THREE.Mesh | null {
-    // 通过ExtrudeItem的静态方法创建拉伸体
+  private onMouseClick(event: MouseEvent) {
+
+    // 获取渲染器 DOM 元素的边界矩形
+    const rect = this.app.renderer.domElement.getBoundingClientRect();
+    // 计算鼠标位置归一化坐标
+    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    // 根据鼠标位置设置射线检测器的方向
+    this.raycaster.setFromCamera(this.mouse, this.app.camera);
+ 
+
+    // 在所有草图（当前+历史）中查找被点击的元素
+    const allItems:SketchItem[][] = this.sketchManager.allSketchItems;
+
+    // 使用 pick 方法检测射线相交
+    const hit = this.pick(this.raycaster, allItems);
+    this.selectedSketch = hit;
+    console.log('hit', hit);
+  }
+  pick(raycaster: THREE.Raycaster, items: SketchItem[][]) {
+    // 将草图项转换为 THREE.Object3D 数组，并过滤掉 null 值
+    const objects = items.flat().map(i => i.object3D).filter(Boolean) as THREE.Object3D[];
+    // 使用射线检测器检测与 objects 的相交
+    const intersects = raycaster.intersectObjects(objects);
+    // 如果有相交的物体，高亮第一个相交的草图项
+    if (intersects.length > 0) {
+      const obj = intersects[0].object;
+      // 找到与相交物体对应的 SketchItem
+      const hit = items.find(i => i.find(j => j.object3D === obj))?? null;
+
+      return hit; // 返回找到的草图项
+    }
+    // 如果没有相交的物体，取消高亮
+
+    return null; // 返回 null
+  }
+
+
+
+  // 确认：构造拉伸，关闭对话框
+  public confirmExtrude() {
+    if (!this.selectedSketch) return;
+    this.createExtrudeFromItem(this.selectedSketch, { start: this.startValue, end: this.endValue, tryWasm: true }, 'XY');
+    this.dialogVisible.value = false;
+    this.selectedSketch = null;
+  }
+
+  // 取消：关闭对话框
+  public cancelDialog() {
+    this.dialogVisible.value = false;
+    this.selectedSketch = null;
+  }
+
+  // 创建拉伸体
+  private createExtrudeFromItem(item: any, params: any, plane: string): THREE.Mesh | null {
     const mesh = ExtrudeItem.createExtrudeMesh(item, params, plane, this.material);
     if (mesh) {
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
       this.app.scene.add(mesh);
+      this.app.needsRender = true;
       return mesh;
     }
     return null;
-  }
-
-  /**
-   * 生成拉伸体预览（不落地到场景，仅返回mesh）
-   * @param item 草图项对象，例如rect、circle等
-   * @param params 创建拉伸体时的参数
-   * @param plane 拉伸体所在的平面，默认为'XY'
-   * @returns 返回生成的THREE.Mesh拉伸体对象，如果失败则返回null
-   */
-  public createPreviewExtrudeFromItem(item: any, params: any, plane: string = 'XY'): THREE.Mesh | null {
-    // 通过ExtrudeItem的静态方法创建预览体（不添加到场景）
-    const mesh = ExtrudeItem.createExtrudeMesh(item, params, plane, this.material);
-    if (mesh) {
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      return mesh;
-    }
-    return null;
-  }
-
-  /**
-   * 设置拉伸高度
-   * @param height 新的拉伸高度
-   */
-  public setHeight(height: number) {
-    this.height = height; // 更新类的height属性值
-  }
-
-  // ========== EventManager 相关逻辑 ==========
-
-  /**
-   * 事件管理器，负责交互和拉伸体生成
-   */
-  public static EventManager = class EventManager {
-    private raycaster = new THREE.Raycaster(); // 射线投射器对象
-    private mouse = new THREE.Vector2(); // 鼠标位置的二维向量
-    private extrudedMeshes: THREE.Mesh[] = []; // 已拉伸的网格对象数组
-    private material: THREE.MeshStandardMaterial; // 拉伸体的材质
-    public onSketchPicked?: (sketch: SketchItem) => void; // 当草图项被选中时触发的回调函数
-
-    constructor(private app: any, private manager: any) {
-      this.app = app;
-      this.material = new THREE.MeshStandardMaterial({
-        color: 0x66ccff,
-        metalness: 0.2,
-        roughness: 0.6,
-      });
-    }
-
-    /**
-     * 初始化事件监听器
-     */
-    init() {
-      this.app.renderer.domElement.addEventListener('click', this.onMouseClick.bind(this)); // 绑定鼠标点击事件监听器
-    }
-
-    /**
-     * 对选中的草图项进行拉伸
-     * @param sketch 草图项数组
-     */
-    extrude(sketch: SketchItem[]) {
-      const allItems = toRaw(sketch); // 获取草图项原始对象
-      allItems.forEach((item) => {
-        if (!item || !item.object3D) return; // 如果草图项或其3D对象不存在，跳过
-        if (item.type === 'circle') {
-          CircleExtrudeItem.extrudeCircle(item as CircleItem, this.app, this.material, 20); // 使用特征类静态方法
-        }
-        // TODO: 其他类型 (line, rect, spline) 可在此扩展
-      });
-    }
-
-    /**
-     * 通过射线投射器选择草图项
-     * @param raycaster 射线投射器对象
-     * @param items 草图项二维数组
-     * @returns 返回选中的SketchItem对象，如果未选中则返回null
-     */
-    pick(raycaster: THREE.Raycaster, items: SketchItem[][]): SketchItem | null {
-      const objects = items.flat().map(i => i.object3D).filter(Boolean) as THREE.Object3D[]; // 创建场景中的物体数组
-      const intersects = raycaster.intersectObjects(objects); // 获取与射线相交的物体
-      if (intersects.length > 0) {
-        const obj = intersects[0].object; // 获取第一个相交的物体
-        const hit = items.flat().find(j => j.object3D === obj) ?? null; // 查找对应的草图项
-        return hit; // 返回选中的草图项
-      }
-      return null; // 返回null
-    }
-
-    /**
-     * 处理鼠标点击事件
-     * @param event 鼠标点击事件
-     */
-    private onMouseClick(event: MouseEvent) {
-      const hit = onExtrudeMouseClick(this.app, this.manager, event, this.onSketchPicked);
-      if (hit) {
-        this.extrude([hit]); // 对选中的草图项进行拉伸
-      }
-    }
   }
 }

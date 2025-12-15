@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import AppManager from '../../AppManager';
+import { SketchManager } from '.';
 
 /**
  * SketchSceneManager
@@ -12,7 +14,7 @@ export class SketchSceneManager {
    * @param app 主应用管理器，必须包含 scene 和 renderOnce 方法
    * @param manager 草图管理器，必须包含 sketchItems 响应式数组
    */
-  constructor(private app: any, private manager: any) {}
+  constructor(private app: AppManager, private manager: SketchManager) {}
 
   /**
    * clearSketchObjectsFromScene
@@ -37,10 +39,10 @@ export class SketchSceneManager {
     toRemove.forEach((obj: THREE.Object3D) => this.app.scene.remove(obj));
 
     // 调用每个草图元素的 remove 方法
-    this.manager.sketchItems.value.forEach((i: any) => i.remove(this.app.scene));
+    this.manager.sketch.items.forEach((i: any) => i.remove(this.app.scene));
 
     // 清空草图数组
-    this.manager.sketchItems.value = [];
+    this.manager.sketch.items = [];
 
     // 渲染一次
     this.app.renderOnce();
@@ -61,7 +63,7 @@ export class SketchSceneManager {
     item.remove(this.app.scene);
 
     // 从响应式数组中删除
-    this.manager.sketchItems.value = this.manager.sketchItems.value.filter((i: any) => i !== item);
+    this.manager.sketch.items = this.manager.sketch.items.filter((i: any) => i !== item);
 
     // 渲染更新
     this.app.renderOnce();

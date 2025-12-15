@@ -10,6 +10,7 @@ import { SketchItem } from './SketchItem';
 
 // 定义LineItem类，继承自SketchItem，用于表示和绘制线段
 export class LineItem extends SketchItem {
+
   // 构造函数，接受两个THREE.Vector3类型的参数：start和end（end可以为null）
   constructor(public start: THREE.Vector3, public end: THREE.Vector3 | null = null) {
     super("line");
@@ -67,16 +68,4 @@ export class LineItem extends SketchItem {
     return new LineItem(start, end);
   }
 
-  static handleLineTool(app: any, manager: any, intersect: THREE.Vector3) {
-    if (!manager.previewItem || !(manager.previewItem instanceof LineItem)) {
-      manager.previewItem = new LineItem(intersect);
-    } else {
-      const l = manager.previewItem as LineItem;
-      l.end = intersect.clone();
-      l.remove(app.scene);
-      l.draw(app.scene);
-      manager.sketchItems.value.push(l);
-      manager.previewItem = new LineItem(intersect.clone());
-    }
-  }
 }

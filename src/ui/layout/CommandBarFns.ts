@@ -7,7 +7,7 @@
 
 import { RectExtrudeItem, CircleExtrudeItem, ExtrudeItem } from '../../core/geometry/features';
 import type { SketchItem } from '../../core/geometry/sketchs';
-import { ExtrudeEvents } from '../../core/managers/eventManager/featuresEvent/extrudeEvents';
+import { ExtrudeEvents } from '../../core/managers/eventManager/featuresEvent/ExtrudeEvents';
 
 export class CommandBarFns {
   static onRectClick(sketch, showRectDialog) {
@@ -38,8 +38,8 @@ export class CommandBarFns {
     sketch.sketchSession.setTool('arc');
     if (showArcDialog && typeof showArcDialog === 'object' && 'value' in showArcDialog) {
       showArcDialog.value = true;
-      }
     }
+  }
 
     static onArcModeSelect(sketch, showArcDialog, mode) {
       sketch.sketchSession.setArcMode(mode);
@@ -97,26 +97,5 @@ export class CommandBarFns {
       };
       extrude.eventManager.init();
     }
-  }
-
-  /**
-   * 拉伸预览事件（UI入口，实际逻辑见ExtrudeEvents类）
-   */
-  static onExtrudePreview(app, extrude, selectedSketch, previewMesh, params) {
-    ExtrudeEvents.onExtrudePreview(app, extrude, selectedSketch, previewMesh, params);
-  }
-
-  /**
-   * 拉伸确认事件（UI入口，实际逻辑见ExtrudeEvents类）
-   */
-  static onExtrudeConfirm(app, extrude, selectedSketch, previewMesh, showExtrudeDialog, params) {
-    ExtrudeEvents.onExtrudeConfirm(app, extrude, selectedSketch, previewMesh, showExtrudeDialog, params);
-  }
-
-  /**
-   * 关闭拉伸预览和对话框事件（UI入口，实际逻辑见ExtrudeEvents类）
-   */
-  static onExtrudeClose(app, previewMesh, showExtrudeDialog) {
-    ExtrudeEvents.onExtrudeClose(app, previewMesh, showExtrudeDialog);
   }
 }

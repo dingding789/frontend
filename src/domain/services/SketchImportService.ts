@@ -1,20 +1,38 @@
 // src/domain/services/SketchImportService.ts
-import { exportSketchJSON, importSketchJSON } from '../../core/managers/sketchManager/sketchSerialization';
+import { exportSketchJSON } from '../../core/managers/sketchManager/sketchSerialization';
 import {SketchFactory} from '../factories/SketchFactory';
-
+import * as THREE from 'three';
+import { SketchManager, SketchStruct } from '../../core/managers/sketchManager/SketchManager';
+import AppManager from '../../core/AppManager';
+import { SketchJSON } from '../models/SketchModel';
 export class SketchImportService {
-  constructor(private app: any, private manager: any) {}
+  constructor(private app: AppManager, private manager: SketchManager) {}
 
-  exportSketch(name: string, list: any[], items: any[], constraints: any[], plane: string) {
+  exportSketch(name: string, sketch: SketchStruct, constraints: any[]) {
     const uniqueName = name;
-    return exportSketchJSON(uniqueName, plane, items, constraints);
+    return exportSketchJSON(uniqueName, sketch, constraints);
   }
 
-  importFromJSON(data: any) {
-    this.manager.sketchItems.value.length = 0;
-    const items = importSketchJSON(data, SketchFactory, this.app.scene);
-    this.manager.sketchItems.value.push(...items);
-    this.manager.allSketchItems.push([...this.manager.sketchItems.value]);
+  importFromJSON(data: SketchJSON) {
+    this.manager.sketch = {
+      id: data.id,
+      frontend_id: data.frontend_id,
+      name: data.name,
+      type: "sketch",
+      planeNormal: data.planeNormal,
+      planeOrigin: data.planeOrigin,
+      items: [],
+      createdAt: data.created_at,
+      constraints: data.constraints || [],
+    };
+    for (const itemData of data.items || []) {
+      const obj = SketchFactory.fromJSON(itemData);
+      if (obj) {
+        obj.draw(this.app.scene);
+        this.manager.sketch.items.push(obj);
+      }
+    }
+    this.manager.allSketch.push(this.manager.sketch);
     this.app.renderOnce();
   }
 }

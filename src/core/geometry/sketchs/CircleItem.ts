@@ -61,7 +61,7 @@ export class CircleItem extends SketchItem {
   static fromJSON(data: any): CircleItem {
     const mode: CircleMode = (data.mode as CircleMode) ?? 'two-point';
     const planeNormalFromJson = Array.isArray(data.planeNormal) ? new THREE.Vector3(...data.planeNormal) : new THREE.Vector3(0, 0, 1);
-
+    //布尔标记，用来判断反序列化时某个点数据是否存在且有效
     const hasPoint1 = Array.isArray(data.point1) && data.point1.length === 3;
     const hasPoint2 = Array.isArray(data.point2) && data.point2.length === 3;
     const hasPoint3 = Array.isArray(data.point3) && data.point3.length === 3;
@@ -110,9 +110,9 @@ export class CircleItem extends SketchItem {
   draw(scene: THREE.Scene) {
     if (!this.center || this.radius <= 0) return;
     const circlePoints: THREE.Vector3[] = [];
-    const segmentCount = 64;
+    const segmentCount = 64;//分段数
     for (let i = 0; i <= segmentCount; i++) {
-      const theta = (i / segmentCount) * 2 * Math.PI;
+      const theta = (i / segmentCount) * 2 * Math.PI;//θ（theta）是圆周参数角，单位是弧度
       const offsetOnPlane = this.axisU.clone().multiplyScalar(this.radius * Math.cos(theta))
         .add(this.axisV.clone().multiplyScalar(this.radius * Math.sin(theta)));
       circlePoints.push(this.center.clone().add(offsetOnPlane));
@@ -172,58 +172,6 @@ export class CircleItem extends SketchItem {
       radius: this.radius ?? 0
     };
   }
-
-  static handleCircleTool(app: any, manager: any, intersectionPoint: THREE.Vector3, mode: 'two-point' | 'three-point', plane: THREE.Plane) {
-    const selectedPlaneNormal = plane?.normal.clone() ?? new THREE.Vector3(0, 0, 1);
-    const { previewItem } = manager;
-
-    if (mode === 'two-point') {
-      if (!previewItem || !(previewItem instanceof CircleItem) || previewItem.mode !== 'two-point') {
-        manager.previewItem = new CircleItem('two-point', intersectionPoint.clone(), intersectionPoint.clone(), undefined, selectedPlaneNormal);
-      } else {
-        const circleItem = manager.previewItem as CircleItem;
-        circleItem.point2 = intersectionPoint.clone();
-        circleItem.center = circleItem.point1.clone();
-        circleItem.radius = circleItem.point1.distanceTo(circleItem.point2);
-        circleItem.remove(app.scene);
-        circleItem.draw(app.scene);
-        manager.sketchItems.value.push(circleItem);
-        manager.previewItem = null;
-        app.renderOnce();
-      }
-    } else {
-      // three-point
-      if (!previewItem || !(previewItem instanceof CircleItem) || previewItem.mode !== 'three-point') {
-        // 首次点击：仅确定第一个点；不要让 point2=point1，避免退化
-        const circleItem = new CircleItem('three-point', intersectionPoint.clone(), intersectionPoint.clone(), undefined, selectedPlaneNormal);
-        circleItem.point2 = undefined;
-        circleItem.point3 = undefined;
-        circleItem.center = circleItem.point1.clone();
-        circleItem.radius = 0;
-        manager.previewItem = circleItem;
-      } else {
-        const circleItem = manager.previewItem as CircleItem;
-        if (!circleItem.point2) {
-          // 第二次点击：确定第二点；之后鼠标移动预览第三点
-          circleItem.point2 = intersectionPoint.clone();
-          circleItem.center = circleItem.point1.clone();
-          circleItem.radius = circleItem.point1.distanceTo(circleItem.point2);
-          app.renderOnce();
-        } else if (!circleItem.point3) {
-          // 第三次点击：确定第三点并落地
-          circleItem.point3 = intersectionPoint.clone();
-          const circleBy3 = calcCircleBy3PointsOnPlane(circleItem.point1, circleItem.point2, circleItem.point3, selectedPlaneNormal);
-          circleItem.center = circleBy3.center;
-          circleItem.radius = circleBy3.radius;
-          circleItem.remove(app.scene);
-          circleItem.draw(app.scene);
-          manager.sketchItems.value.push(circleItem);
-          manager.previewItem = null;
-          app.renderOnce();
-        }
-      }
-    }
-  }
 }
 
 // 通过三点计算圆心和半径（带平面法向）
@@ -245,7 +193,8 @@ export function calcCircleBy3PointsOnPlane(
   const pointA2D = { x: 0, y: 0 };
   const pointB2D = projectToPlane2D(point2);
   const pointC2D = projectToPlane2D(point3);
-
+  //coef为三点求圆心方程的系数，rhs为等式右边的常数项
+  //线性系统为： [ coefA coefB ] [ cx ] = [ rhsE ] [ coefC coefD ] [ cy ] [ rhsF ]
   const coefA = 2 * (pointB2D.x - pointA2D.x);
   const coefB = 2 * (pointB2D.y - pointA2D.y);
   const coefC = 2 * (pointC2D.x - pointA2D.x);
@@ -267,16 +216,16 @@ export function calcCircleBy3PointsOnPlane(
   return { center, radius };
 }
 
-// 将从后端还原的草图项（尚未 draw 的）统一绘制出来
-export function rehydrateSketches(app: any, manager: any) {
-  const sketchItems = (manager.sketchItems?.value ?? []) as any[];
-  for (const sketchItem of sketchItems) {
-    if (!sketchItem) continue;
-    if (!sketchItem.object3D && typeof sketchItem.draw === 'function') {
-      try { sketchItem.draw(app.scene); } catch {}
-    }
-  }
-  app?.renderOnce?.();
-}
+// // 将从后端还原的草图项（尚未 draw 的）统一绘制出来
+// export function rehydrateSketches(app: any, manager: any) {
+//   const sketchItems = (manager.sketchItems?.value ?? []) as any[];
+//   for (const sketchItem of sketchItems) {
+//     if (!sketchItem) continue;
+//     if (!sketchItem.object3D && typeof sketchItem.draw === 'function') {
+//       try { sketchItem.draw(app.scene); } catch {}
+//     }
+//   }
+//   app?.renderOnce?.();
+// }
 
 

@@ -46,9 +46,4 @@ export class PointItem extends SketchItem {
     return new PointItem(new THREE.Vector3(...data.position));
   }
 
-  static handlePointTool(app: any, manager: any, intersect: THREE.Vector3) {
-    const p = new PointItem(intersect);
-    p.draw(app.scene);
-    manager.sketchItems.value.push(p);
-  }
 }
