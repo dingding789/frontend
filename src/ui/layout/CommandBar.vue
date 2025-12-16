@@ -19,7 +19,14 @@
     </template>
 
     <div class="flex-1"></div>
+
   </div>
+
+  <!-- 固定在界面右上角的仿真按钮 -->
+  <button
+    class="fixed top-2 right-2 z-30 px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-500 shadow"
+    @click="handleSimulateClick"
+  >仿真</button>
 
   <RectModeDialog
     v-if="showRectDialog"
@@ -176,6 +183,12 @@ function handleExtrudeClick() {
   closeSketchDialogs(undefined, 'extrude');
   extrude.dialogVisible = true;
   extrude.enablePickMode();
+}
+
+// 仿真按钮点击：广播事件，供页面其它模块监听处理
+function handleSimulateClick() {
+  closeSketchDialogs(undefined, 'simulate');
+  try { window.dispatchEvent(new CustomEvent('simulation:open')); } catch {}
 }
 
 //(window as any).handleSketchDblClick = handleSketchDblClick;
