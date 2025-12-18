@@ -10,8 +10,10 @@
     "clean:srcjs": "powershell -NoProfile -Command \"Get-ChildItem -Path src -Recurse -Include *.js,*.vue.js -File | Remove-Item -Force\""
   },
   "dependencies": {
+    "@kitware/vtk.js": "^34.16.2",
     "@tailwindcss/vite": "^4.1.13",
-    "axios": "^1.12.2",
+    "axios": "^1.13.2",
+    "pinia": "^3.0.4",
     "tailwindcss": "^4.1.13",
     "three": "^0.180.0",
     "vue": "^3.5.22"
