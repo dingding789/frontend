@@ -1,11 +1,4 @@
-declare module '*.vue' {
-  import { DefineComponent } from 'vue';
-  const component: DefineComponent<{}, {}, any>;
-  export default component;
-}
-declare const API_BASE: string
-
-// TypeScript shims for modules without type declarations
+// Shims for modules lacking TypeScript declarations
 declare module 'pako' {
   export function inflate(data: Uint8Array | ArrayLike<number>, options?: any): Uint8Array;
 }

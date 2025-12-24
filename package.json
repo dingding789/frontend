@@ -13,6 +13,7 @@
     "@kitware/vtk.js": "^34.16.2",
     "@tailwindcss/vite": "^4.1.13",
     "axios": "^1.13.2",
+    "pako": "^2.1.0",
     "pinia": "^3.0.4",
     "tailwindcss": "^4.1.13",
     "three": "^0.180.0",

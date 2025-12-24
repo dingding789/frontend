@@ -27,6 +27,12 @@ export default defineConfig(({ mode }) => {
       port: 3001,
       open: true,
     },
+    optimizeDeps: {
+      include: [
+        '@kitware/vtk.js/IO/XML/XMLUnstructuredGridReader',
+        '@kitware/vtk.js/IO/XML/XMLReader',
+      ],
+    },
     // 显式配置 CSS Modules（Vite 默认已支持 *.module.css）
     css: {
       modules: {
