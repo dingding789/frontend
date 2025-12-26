@@ -22,7 +22,7 @@ export const useCaeStore = defineStore('cae', () => {
   const physicalGroups = ref<string[]>([]);
   const boundaryConditions = ref<BoundaryCondition[]>([]);
 
-  const API_BASE = 'http://localhost:8000';
+  const API_BASE = 'http://192.168.5.19:8000';
 
   async function uploadModel(file: File) {
     isProcessing.value = true;
