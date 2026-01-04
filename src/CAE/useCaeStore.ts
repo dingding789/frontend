@@ -21,8 +21,14 @@ export const useCaeStore = defineStore('cae', () => {
   
   const physicalGroups = ref<string[]>([]);
   const boundaryConditions = ref<BoundaryCondition[]>([]);
+  const groupsData = ref<any>(null); // 存储从后端获取的物理组节点映射
+  
+  // 交互式面选择状态
+  const isSelectingFace = ref(false); // 是否正在选择面
+  const selectedFace = ref<string | null>(null); // 选中的面名称
+  const selectedFaceData = ref<any>(null); // 选中的面的详细数据（用于高亮）
 
-  const API_BASE = 'http://192.168.5.19:8000';
+  const API_BASE = 'http://127.0.0.1:8000';
 
   async function uploadModel(file: File) {
     isProcessing.value = true;
@@ -49,9 +55,13 @@ export const useCaeStore = defineStore('cae', () => {
     try {
       const res = await axios.post(`${API_BASE}/api/mesh`, { session_id: sessionId.value });
       if (res.data) {
-        modelUrl.value = res.data.mesh_url;
         viewMode.value = 'mesh';
-        if (res.data.groups_url) fetchGroups(res.data.groups_url);
+        // 先获取 groups 数据，再更新 modelUrl 触发渲染
+        if (res.data.groups_url) {
+          await fetchGroups(res.data.groups_url);
+          console.log('[Store] groupsData 已加载，面数量:', Object.keys(groupsData.value || {}).length);
+        }
+        modelUrl.value = res.data.mesh_url;
       }
     } catch (e) { alert("网格划分失败"); } 
     finally { isProcessing.value = false; }
@@ -61,6 +71,7 @@ export const useCaeStore = defineStore('cae', () => {
     try {
       const res = await axios.get(url);
       physicalGroups.value = Object.keys(res.data).filter(k => k.startsWith('Face'));
+      groupsData.value = res.data;  // 保存完整的节点映射数据
     } catch (e) {}
   }
 
@@ -113,7 +124,8 @@ export const useCaeStore = defineStore('cae', () => {
 
   return {
     modelUrl, sessionId, isProcessing, loadingText, viewMode,
-    physicalGroups, boundaryConditions,
+    physicalGroups, boundaryConditions, groupsData,
+    isSelectingFace, selectedFace, selectedFaceData,
     uploadModel, generateMesh, addBoundaryCondition, buildSimulation, solveSimulation
   };
 });

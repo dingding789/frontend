@@ -197,6 +197,7 @@ function createUnstructuredGridReader() {
 
     // 4. Parse PointData (scalars)
     let scalars: Float32Array | null = null;
+    let displacementVector: Float32Array | null = null;
     let activeName = 'Displacement';
     const pointDataElem = piece.getElementsByTagName('PointData')[0];
 
@@ -210,7 +211,11 @@ function createUnstructuredGridReader() {
         const numComponents = Number(arrElem.getAttribute('NumberOfComponents') || '1');
         console.log(`[VTU] PointData[${idx}]: Name="${arrName}", Components=${numComponents}`);
 
-        if (arrName === 'Displacement') {
+        const lowerName = arrName.toLowerCase();
+        const looksLikeDisplacement =
+          lowerName === 'displacement' || lowerName === 'u' || lowerName.includes('disp') || lowerName.includes('velocity');
+
+        if (looksLikeDisplacement) {
           const arrData = (vtkXMLReader.processDataArray as any)(
             nbPoints,
             arrElem as any,
@@ -228,13 +233,14 @@ function createUnstructuredGridReader() {
             const maxVal = Math.max(...Array.from(scalars));
             console.log(`[VTU] Using Displacement (scalar) as scalars, range: [${minVal}, ${maxVal}]`);
           } else if (numComponents === 3) {
-            // Vector displacement - compute magnitude
+            // Vector displacement - keep vector for deformation, compute magnitude for coloring
+            displacementVector = new Float32Array(arrData.values);
             const magnitude = new Float32Array(nbPoints);
             for (let i = 0; i < nbPoints; i++) {
               const base = i * 3;
-              const dx = Number(arrData.values[base]) || 0;
-              const dy = Number(arrData.values[base + 1]) || 0;
-              const dz = Number(arrData.values[base + 2]) || 0;
+              const dx = Number(displacementVector[base]) || 0;
+              const dy = Number(displacementVector[base + 1]) || 0;
+              const dz = Number(displacementVector[base + 2]) || 0;
               magnitude[i] = Math.sqrt(dx * dx + dy * dy + dz * dz);
             }
             scalars = magnitude;
@@ -284,6 +290,17 @@ function createUnstructuredGridReader() {
       name: activeName,
     });
     polyData.getPointData().setScalars(scalarArray);
+
+    // Preserve displacement vector for deformation (if available)
+    if (displacementVector && displacementVector.length === nbPoints * 3) {
+      const displacementArray = vtkDataArray.newInstance({
+        numberOfComponents: 3,
+        values: displacementVector,
+        name: 'Displacement',
+      });
+      polyData.getPointData().addArray(displacementArray);
+    }
+
     const scalarMin = Math.min(...Array.from(scalars));
     const scalarMax = Math.max(...Array.from(scalars));
     console.log(`[VTU] Scalars set: ${activeName}, range [${scalarMin}, ${scalarMax}]`);
